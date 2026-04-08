@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import fetch from "node-fetch";
 import { SYSTEM_PROMPT } from "../../../prompts/structuredData.system.prompt";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { File } from "../../../entities/files/file";
@@ -9,8 +9,10 @@ interface GenerateStructuredDataResponse {
   data?: any;
 }
 
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
 /**
- * Generates structured JSON data from parsed resume text using Google Gemini AI
+ * Generates structured JSON data from parsed resume text using OpenRouter/OpenAI model
  * @param fileId - Unique identifier of the resume file
  * @param parsedText - Raw text extracted from the resume
  * @returns Promise with success status and structured data
@@ -29,21 +31,67 @@ export const generateStructuredData = async (
       };
     }
 
-    // Initialize Google Gemini AI with API key from environment
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "Missing OPENROUTER_API_KEY / OPENAI_API_KEY in environment variables",
+      );
+    }
 
-    // Get the generative model
-    const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash" });
+    const modelName = process.env.OPENROUTER_MODEL || "gpt-4o-mini";
+    const inputData = `${SYSTEM_PROMPT}\n\nResume Text:\n${parsedText}`;
 
-    // Prepare the prompt with system instructions and parsed text
-    const prompt = `${SYSTEM_PROMPT}\n\nResume Text:\n${parsedText}`;
+    const messages = [
+      {
+        role: "system",
+        content: SYSTEM_PROMPT,
+      },
+      {
+        role: "user",
+        content: inputData,
+      }
+    ]
 
-    // Generate structured data using Gemini AI
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
+    const response = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelName,
+        messages,
+        temperature: 0,
+        max_tokens: 4000,
+        top_p: 1,
+        presence_penalty: 0,
+        frequency_penalty: 0,
+      }),
+    });
 
-    // Parse the AI response as JSON
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
+    }
+
+    const responseText = await response.text();
+    let result: any;
+    try {
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(
+        `Unexpected response from OpenRouter: ${responseText.substring(0, 200)}`,
+      );
+    }
+    const text = result?.choices?.[0]?.message?.content;
+
+    if (!text || text.trim().length === 0) {
+      return {
+        success: false,
+        message: "Empty response received from OpenRouter",
+      };
+    }
+
     let structuredData;
     try {
       structuredData = JSON.parse(text);
@@ -62,6 +110,7 @@ export const generateStructuredData = async (
       file.getOriginalName(),
       file.getPath(),
       file.getSize(),
+      file.getHash(),
       file.getFormat(),
       file.uploadedAt,
       file.getParseText(),
