@@ -1,4 +1,4 @@
-const skillToDomainMap: Record<string, string> = {
+export const skillToDomainMap: Record<string, string> = {
   // 🌐 Frontend
   react: "Frontend",
   angular: "Frontend",

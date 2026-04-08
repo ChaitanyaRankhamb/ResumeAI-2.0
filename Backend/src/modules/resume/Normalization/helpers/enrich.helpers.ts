@@ -3,6 +3,8 @@
  * Utility functions for resume enrichment services
  */
 
+import { skillToDomainMap } from "../maps/skillDomainMap";
+
 /**
  * Calculate duration in months between two dates
  * @param start - Start date string
