@@ -25,6 +25,12 @@ export const uploadResumeController = async (
     const resume = req.file; // <-- multer provides the file here
     if (!resume) throw new AppError("Resume file is not received", 400);
 
+    console.log("Received file:", {
+      originalname: resume.originalname,
+      mimetype: resume.mimetype,
+      size: resume.size,
+    });
+
     // Validate file type
     if (!ALLOWED_TYPES.includes(resume.mimetype)) {
       throw new AppError(
@@ -34,7 +40,7 @@ export const uploadResumeController = async (
     }
 
     // Validate file size
-    if (resume.size < MAX_FILE_SIZE) {
+    if (resume.size > MAX_FILE_SIZE) {
       throw new AppError("File size exceeds 10MB limit.", 400);
     }
 
@@ -56,7 +62,7 @@ export const uploadResumeController = async (
     res.status(200).json({
       success: true,
       message: "Resume uploaded and analyzed successfully",
-      data: result,
+      data: result.data,
     });
   } catch (error) {
     // Forward to global error handler
