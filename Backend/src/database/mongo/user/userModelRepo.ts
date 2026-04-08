@@ -72,7 +72,7 @@ export class MongoUserRepository implements IUserRepository {
         isActive: user.isUserActive(),
         providers,
       },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!doc) throw new AppError("User not found", 404);
