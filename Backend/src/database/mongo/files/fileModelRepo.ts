@@ -19,24 +19,28 @@ function docToFile(doc: FileDocument): File {
     doc.originalName,
     doc.path,
     doc.size,
+    doc.hash,
     doc.format,
     doc.uploadedAt,
     doc.parseText || [], // parsed text sections
     doc.structuredData || defaultResumeStructuredData(), // structured data from AI
+    doc.analyzedData, // analyzed data from AI
   );
 }
 
 export class MongoFileRepository implements IFileRepository {
   async createFile(data: CreateFileData): Promise<File> {
-    // Check for duplicate upload by same user
+    // Check for duplicate upload by same user with same hash
     const existing = await FileModel.findOne({
       userId: new mongoose.Types.ObjectId(data.userId.toString()),
+      hash: data.hash,
     });
 
     if (existing) {
-      // Optionally update uploadedAt timestamp
-      existing.uploadedAt = new Date();
-      await existing.save();
+      // Duplicate detected, return existing file
+      console.log(
+        `[FileRepo] Duplicate file detected. Returning existing file: ${existing._id}`,
+      );
       return docToFile(existing);
     }
 
@@ -48,11 +52,13 @@ export class MongoFileRepository implements IFileRepository {
       path: data.path,
       size: data.size,
       format: data.format,
+      hash: data.hash,
       uploadedAt: data.uploadedAt ?? new Date(),
       parseText: data.parseText || [], // parsed text sections
       structuredData: data.structuredData || defaultResumeStructuredData(), // structured data
     });
 
+    console.log(`[FileRepo] New file created: ${doc._id}`);
     return docToFile(doc);
   }
 
@@ -65,11 +71,13 @@ export class MongoFileRepository implements IFileRepository {
         path: file.getPath(),
         size: file.getSize(),
         format: file.getFormat(),
+        hash: file.getHash(),
         uploadedAt: file.uploadedAt,
         parseText: file.getParseText(), // update parsed text
         structuredData: file.getStructuredData(), // update structured data
+        analyzedData: file.getAnalyzedData(), // update analyzed data
       },
-      { new: true }, // return updated document
+      { returnDocument: "after" }, // return updated document
     );
 
     return doc ? docToFile(doc) : null;
@@ -99,13 +107,13 @@ export class MongoFileRepository implements IFileRepository {
   ): Promise<File | null> {
     const doc = await FileModel.findOne({
       userId: new mongoose.Types.ObjectId(userId.toString()),
-      hash,
+      hash: hash,
     });
     return doc ? docToFile(doc) : null;
   }
 
   async findFilesByHash(hash: string): Promise<File[]> {
-    const docs = await FileModel.find({ hash });
+    const docs = await FileModel.find({ hash: hash });
     return docs.map(docToFile);
   }
 }

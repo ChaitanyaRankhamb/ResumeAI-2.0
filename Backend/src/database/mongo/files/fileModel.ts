@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 import z from "zod";
 import { ResumeStructuredData } from "../../../modules/resume/Normalization";
+import { ResumeUploadResponse } from "../../../../../types/resumeUploadResponse.d";
 
 
 // zod validation
@@ -11,9 +12,11 @@ export const FileZodSchema = z.object({
   path: z.string().min(1, "File path is required"),
   size: z.number().positive("File size must be positive"),
   format: z.string().min(1, "File format is required"),
+  hash: z.string().min(64).max(64), // SHA-256 hash (64 hex characters)
   uploadedAt: z.date().optional(),
   parseText: z.array(z.string()).optional(), // Array of parsed text sections
   structuredData: z.any().optional(), // Structured JSON data from AI
+  analyzedData: z.any().optional(), // Analyzed JSON data from AI
 });
 
 export interface FileDocument extends Document {
@@ -24,9 +27,11 @@ export interface FileDocument extends Document {
   path: string;
   size: number; // in kb or mb
   format: string;
+  hash: string; // SHA-256 hash for deduplication
   uploadedAt: Date;
   parseText?: string[]; // Array of parsed text sections
   structuredData?: ResumeStructuredData; // Structured JSON data from AI processing
+  analyzedData?: ResumeUploadResponse; // Analyzed JSON data from AI processing
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,6 +70,13 @@ const fileSchema = new Schema<FileDocument>(
       required: true,
       trim: true,
     },
+    hash: {
+      type: String,
+      required: true,
+      index: true,
+      minlength: 64,
+      maxlength: 64,
+    },
     uploadedAt: {
       type: Date,
       default: () => new Date(),
@@ -77,13 +89,20 @@ const fileSchema = new Schema<FileDocument>(
       type: Schema.Types.Mixed, // Flexible schema for AI-generated JSON
       default: null,
     },
+    analyzedData: {
+      type: Schema.Types.Mixed,
+      default: null,
+    },
   },
   {
-    timestamps: true, // auto-createdAt & updatedAt
-  },
+    timestamps: true,
+  }
 );
 
-// Ensures same user cannot upload the same file twice
+// Compound index: prevent duplicate files (same user + same hash)
+fileSchema.index({ userId: 1, hash: 1 }, { unique: true });
+
+// Single index on hash for quick lookups
 fileSchema.index({ userId: 1 }, { unique: true });
 
 export const FileModel = mongoose.model<FileDocument>(
