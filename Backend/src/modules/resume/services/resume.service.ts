@@ -10,7 +10,6 @@ import { generateStructuredData } from "./generateStructureData.service";
 import { generateResumeAnalyzedData } from "./generateResumeAnalyzedData.service";
 import { validateStructuredData } from "../../../validations/resumeStructureData.validation";
 import { processResume } from "../Normalization";
-import { sendProgress, cleanupProgressBuffer } from "./sendProgress";
 import redisClient from "../../../config/redis.connection";
 interface responseData {
   success: boolean;
@@ -187,9 +186,6 @@ export const uploadResumeService = async (
       JSON.stringify(finalResumeAnalyzedData.data?.analyzedData),
     );
 
-    // Cleanup progress buffer after successful processing
-    cleanupProgressBuffer(fileId);
-
     return {
       success: true,
       message: "Resume uploaded and processed successfully",
@@ -200,11 +196,6 @@ export const uploadResumeService = async (
     };
   } catch (error: any) {
     console.error("Error in uploadResumeService:", error);
-
-    // Still cleanup buffer on error
-    if (error.fileId) {
-      cleanupProgressBuffer(error.fileId);
-    }
 
     return {
       success: false,
