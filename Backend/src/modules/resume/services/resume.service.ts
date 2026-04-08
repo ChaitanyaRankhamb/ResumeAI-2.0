@@ -10,6 +10,8 @@ import { generateStructuredData } from "./generateStructureData.service";
 import { generateResumeAnalyzedData } from "./generateResumeAnalyzedData.service";
 import { validateStructuredData } from "../../../validations/resumeStructureData.validation";
 import { processResume } from "../Normalization";
+import { sendProgress, cleanupProgressBuffer } from "./sendProgress";
+import redisClient from "../../../config/redis.connection";
 interface responseData {
   success: boolean;
   message: string;
@@ -29,11 +31,69 @@ export const uploadResumeService = async (
 
     // service that store the resume file in upload folder & create file doc
     const fileResult = await resumeFileService(userId, resume);
+    console.log("File result:", fileResult);
+
+    if (fileResult.success && fileResult.data?.isDuplicate) {
+      // return resume analyzed data from redis
+      const cachedAnalyzedData = await redisClient.get(
+        `resume:${fileResult.data?.hash}`,
+      );
+      console.log("Cache lookup for analyzed data:", cachedAnalyzedData);
+      if (cachedAnalyzedData) {
+        const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
+
+        // Validate cached data has required fields
+        if (
+          !parsedAnalyzedData.skillInsights ||
+          !parsedAnalyzedData.skillInsights.allSkills ||
+          !Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
+        ) {
+          console.error(
+            "Invalid cached analyzed data: missing or invalid skillInsights",
+            parsedAnalyzedData,
+          );
+          // If cached data is invalid, continue to process (don't return invalid data)
+        } else {
+          // Ensure the file document has the analyzed data
+          const file = await fileRepository.findFileById(
+            fileResult.data?.fileId,
+          );
+          if (file) {
+            const updatedFile = new File(
+              file.id,
+              file.userId,
+              file.getName(),
+              file.getOriginalName(),
+              file.getPath(),
+              file.getSize(),
+              file.getHash(),
+              file.getFormat(),
+              file.uploadedAt,
+              file.getParseText(),
+              file.getStructuredData(),
+              parsedAnalyzedData, // Save to file document
+            );
+            await fileRepository.updateFile(updatedFile);
+          }
+
+          return {
+            success: true,
+            message: "Resume analyzed data retrieved from cache",
+            data: {
+              fileId: fileResult.data?.fileId,
+              hash: fileResult.data?.hash,
+              analyzedData: parsedAnalyzedData,
+            },
+          };
+        }
+      }
+    }
 
     // parse the resume file and extract info
     const parseResult = await resumeParseService(userId, resume);
 
     const parsedText = parseResult.data?.rawText;
+    console.log("Parsed result:", parsedText);
 
     // Update the file with parsed text if parsing was successful
     if (fileResult.success) {
@@ -49,6 +109,7 @@ export const uploadResumeService = async (
             resumeFile.getOriginalName(),
             resumeFile.getPath(),
             resumeFile.getSize(),
+            resumeFile.getHash(),
             resumeFile.getFormat(),
             resumeFile.uploadedAt,
             [parsedText], // Store parsed text as array with the full text
@@ -88,9 +149,8 @@ export const uploadResumeService = async (
     );
 
     // normalize the validated structured data. call the pipeline function here
-    const normalizationResult = await processResume(
-      validatedStructuredData,
-    );
+    const normalizationResult = await processResume(validatedStructuredData);
+
 
     if (!normalizationResult.success) {
       return {
@@ -115,24 +175,36 @@ export const uploadResumeService = async (
     );
 
     if (!finalResumeAnalyzedData.success) {
-      return  {
+      return {
         success: false,
         message: `Failed to generate analyzed data: ${finalResumeAnalyzedData.message}`,
-      }
+      };
     }
 
+    // save final analyzed data in redis cache
+    await redisClient.set(
+      `resume:${finalResumeAnalyzedData.data?.hash}`,
+      JSON.stringify(finalResumeAnalyzedData.data?.analyzedData),
+    );
+
+    // Cleanup progress buffer after successful processing
+    cleanupProgressBuffer(fileId);
 
     return {
       success: true,
       message: "Resume uploaded and processed successfully",
       data: {
         fileId,
-        structuredData: normalizedStructuredData,
-        analyzedData: finalResumeAnalyzedData,
+        analyzedData: finalResumeAnalyzedData.data?.analyzedData,
       },
     };
   } catch (error: any) {
     console.error("Error in uploadResumeService:", error);
+
+    // Still cleanup buffer on error
+    if (error.fileId) {
+      cleanupProgressBuffer(error.fileId);
+    }
 
     return {
       success: false,
