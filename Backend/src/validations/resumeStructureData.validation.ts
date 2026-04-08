@@ -1,4 +1,5 @@
-import { ResumeStructuredData } from "../types/type";
+import { ResumeStructuredData } from "../modules/resume/Normalization";
+
 
 export const validateStructuredData = (
   data: any
