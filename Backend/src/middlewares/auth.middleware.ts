@@ -15,13 +15,12 @@ export const authMiddleware = async (
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers.authorization;
+  // take token from cookies
+  const token = req.cookies?.accessToken;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Unauthorized - No token" });
+  if (!token) {
+    return res.status(401).json({ message: "No token provided" });
   }
-
-  const token = authHeader.split(" ")[1];
 
   try {
     const payload = verifyAccessToken(token as string);
