@@ -19,17 +19,37 @@ export const loginController = async (
 
     console.log("validated Email", validation);
 
-    // take user and access token form service
-    const { user, accessToken } = await loginService(validation.email);
+    // take user and tokens from service
+    const { user, accessToken, refreshToken } = await loginService(
+      validation.email,
+    );
 
-    // send response to frontend
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+    };
+
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+      maxAge: 30 * 60 * 1000, // 30 minutes
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    });
+
     res.status(200).json({
       success: true,
-      message: "Logged in successfully",
-      data: {
-        user,
-        accessToken,
-      },
+      message: "Login successful",
     });
   } catch (error) {
     // error handling middleware return the error
