@@ -1,5 +1,5 @@
 import fs from "fs";
-const pdfParse = require("pdf-parse");
+import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import textract from "textract";
 import { UserId } from "../../../entities/user/userId";
@@ -22,9 +22,16 @@ export const resumeParseService = async (
 
     // PDF Parsing
     if (mimeType === "application/pdf") {
-      const buffer = fs.readFileSync(resume.path);
-      const data = await pdfParse(buffer);
-      parsedText = data.text;
+      const sourceBuffer =
+        resume.buffer || (resume.path ? fs.readFileSync(resume.path) : null);
+      if (!sourceBuffer) {
+        throw new Error("No source file buffer or path found for PDF parsing.");
+      }
+
+      const parser = new PDFParse({ data: sourceBuffer as Buffer });
+      const pdfResult = await parser.getText();
+      parsedText = pdfResult.text || "";
+      await parser.destroy();
     }
 
     // DOCX Parsing
@@ -32,20 +39,46 @@ export const resumeParseService = async (
       mimeType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      const result = await mammoth.extractRawText({
-        path: resume.path,
-      });
-      parsedText = result.value;
+      if (resume.buffer) {
+        const result = await mammoth.extractRawText({
+          buffer: resume.buffer as Buffer,
+        });
+        parsedText = result.value;
+      } else if (resume.path) {
+        const result = await mammoth.extractRawText({
+          path: resume.path,
+        });
+        parsedText = result.value;
+      } else {
+        throw new Error(
+          "No source file buffer or path found for DOCX parsing.",
+        );
+      }
     }
 
     // DOC Parsing
     else if (mimeType === "application/msword") {
-      parsedText = await new Promise((resolve, reject) => {
-        textract.fromFileWithPath(resume.path, (error, text) => {
-          if (error) reject(error);
-          else resolve(text);
+      if (resume.path) {
+        parsedText = await new Promise((resolve, reject) => {
+          textract.fromFileWithPath(resume.path, (error, text) => {
+            if (error) reject(error);
+            else resolve(text);
+          });
         });
-      });
+      } else if (resume.buffer) {
+        parsedText = await new Promise((resolve, reject) => {
+          textract.fromBufferWithMime(
+            mimeType,
+            resume.buffer as Buffer,
+            (error, text) => {
+              if (error) reject(error);
+              else resolve(text);
+            },
+          );
+        });
+      } else {
+        throw new Error("No source file buffer or path found for DOC parsing.");
+      }
     }
 
     // Unsupported Format
