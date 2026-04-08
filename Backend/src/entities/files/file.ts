@@ -1,5 +1,6 @@
 import { defaultResumeStructuredData, ResumeStructuredData } from "../../modules/resume/Normalization/types/normalizedResume";
 import { UserId } from "../user/userId";
+import { ResumeUploadResponse } from "../../../../types/resumeUploadResponse.d";
 
 export class File {
   constructor(
@@ -9,10 +10,12 @@ export class File {
     private readonly originalName: string,
     private readonly path: string,
     private readonly size: number, // in kb or mb
+    private readonly hash: string,
     private readonly format: string,
     public readonly uploadedAt: Date = new Date(),
     private readonly parseText: string[] = [], // Array to store parsed text sections of the resume
     private readonly structuredData: ResumeStructuredData = defaultResumeStructuredData(), // Structured JSON data from AI processing
+    private readonly analyzedData?: ResumeUploadResponse, // Analyzed JSON data from AI processing
   ) {}
 
   // GETTERS
@@ -32,6 +35,10 @@ export class File {
     return this.size;
   }
 
+  getHash(): string {
+    return this.hash;
+  }
+
   getFormat(): string {
     return this.format;
   }
@@ -43,4 +50,9 @@ export class File {
   getStructuredData(): any {
     return this.structuredData;
   }
+
+  getAnalyzedData(): ResumeUploadResponse | undefined {
+    return this.analyzedData;
+  }
+
 }

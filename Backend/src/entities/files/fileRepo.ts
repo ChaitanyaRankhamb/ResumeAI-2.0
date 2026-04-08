@@ -9,6 +9,7 @@ export interface CreateFileData {
   path: string; // storage path
   size: number; // in kb or mb
   format: string; // file extension/type
+  hash: string; // SHA-256 hash of file content
   uploadedAt?: Date; // default to current date if not provided
   parseText?: string[]; // array of parsed text sections from the resume
   structuredData?: ResumeStructuredData; // structured JSON data from AI processing
