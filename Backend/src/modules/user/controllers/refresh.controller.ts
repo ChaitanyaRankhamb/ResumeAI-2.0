@@ -26,7 +26,7 @@ export const refreshController = async (
 
     // 4. Call the service to rotate the tokens
     // The service verifies the refresh token and updates it in Redis
-    const { accessToken } = await refreshService(refreshToken);
+    const { accessToken, refreshToken: newRefreshToken } = await refreshService(refreshToken);
 
     // 5. Store the new access token in the same cookie that authMiddleware reads.
     // Without this, the retried request still sends the old (expired) cookie,
@@ -44,6 +44,14 @@ export const refreshController = async (
       sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
       path: "/",
       maxAge: 30 * 60 * 1000, // 30 minutes
+    });
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.status(200).json({
