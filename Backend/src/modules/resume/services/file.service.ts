@@ -1,11 +1,10 @@
 import { UserId } from "../../../entities/user/userId";
-import path from "path";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { CreateFileData } from "../../../entities/files/fileRepo";
 import { createHash, randomUUID } from "crypto";
-import { promises as fs } from "fs";
+import minioClient from "../../../config/minio.connection";
 
-interface fileServiceResponse {
+interface FileServiceResponse {
   success: boolean;
   message: string;
   data?: any;
@@ -14,9 +13,9 @@ interface fileServiceResponse {
 export const resumeFileService = async (
   userId: UserId,
   resume: Express.Multer.File,
-): Promise<fileServiceResponse> => {
+): Promise<FileServiceResponse> => {
   try {
-    // STEP 1: Validate input
+    // STEP 1: Validate uploaded file
     if (!resume || !resume.buffer) {
       return {
         success: false,
@@ -25,61 +24,88 @@ export const resumeFileService = async (
     }
 
     const originalName = resume.originalname;
-    console.log(`[FileService] Starting upload for user: ${userId}, file: ${originalName}`);
 
-    // STEP 2: Generate SHA-256 hash of file content
+    console.log(
+      `[FileService] Starting upload for user: ${userId}, file: ${originalName}`,
+    );
+
+    // STEP 2: Generate SHA-256 hash for deduplication
     const hash = createHash("sha256");
+
     hash.update(resume.buffer);
+
     const fileHash = hash.digest("hex");
+
     console.log(`[FileService] File hash: ${fileHash}`);
 
-    // STEP 3: Check if file with same userId and fileHash already exists
-    console.log(`[FileService] Checking for duplicate (userId: ${userId}, hash: ${fileHash})`);
-    const existingFile = await fileRepository.findFileByUserAndHash(userId, fileHash);
+    // STEP 3: Check duplicate file
+    console.log(
+      `[FileService] Checking duplicate for userId: ${userId}, hash: ${fileHash}`,
+    );
+
+    const existingFile = await fileRepository.findFileByUserAndHash(
+      userId,
+      fileHash,
+    );
 
     if (existingFile) {
-      console.log(`[FileService] Duplicate found! Returning existing file: ${existingFile.id}`);
+      console.log(
+        `[FileService] Duplicate found. Existing file ID: ${existingFile.id}`,
+      );
+
       return {
         success: true,
         message: "File already exists - deduplication successful",
         data: {
           fileId: existingFile.id,
           fileName: existingFile.getName(),
-          filePath: `/${existingFile.getPath()}`,
-          hash: fileHash,
+          filePath: existingFile.getPath(),
+          fileHash,
           isDuplicate: true,
         },
       };
     }
 
-    console.log(`[FileService] No duplicate found. Proceeding with upload.`);
+    console.log(`[FileService] No duplicate found. Proceeding upload.`);
 
-    // STEP 4: Create upload directory structure
-    const baseUploadDir = path.join(__dirname, "../../../../upload");
-    const userUploadDir = path.join(baseUploadDir, String(userId));
-
-    console.log(`[FileService] Creating directories: ${userUploadDir}`);
-    await fs.mkdir(baseUploadDir, { recursive: true });
-    await fs.mkdir(userUploadDir, { recursive: true });
-
-    // STEP 5: Generate unique filename and save file
-    const ext = path.extname(originalName);
+    // STEP 4: Generate unique object name
     const timestamp = Date.now();
+
     const uuid = randomUUID().substring(0, 8);
-    const fileName = `${uuid}-${timestamp}${ext}`;
-    const filePath = path.join(userUploadDir, fileName);
 
-    console.log(`[FileService] Saving file: ${filePath}`);
-    await fs.writeFile(filePath, resume.buffer, { flag: "wx" });
-    console.log(`[FileService] File saved successfully`);
+    const fileExtension = originalName.split(".").pop();
 
-    // STEP 6: Create file metadata and save to database
-    const uploadPath = path.posix.join("upload", String(userId), fileName);
+    const fileName = `${uuid}-${timestamp}.${fileExtension}`;
+
+    // logical folder structure inside MinIO
+    const objectName = `${userId}/${fileName}`;
+
+    console.log(
+      `[FileService] Uploading file to MinIO: ${objectName}`,
+    );
+
+    // STEP 5: Upload file to MinIO
+    await minioClient.putObject(
+      process.env.MINIO_BUCKET!,
+      objectName,
+      resume.buffer,
+      resume.size,
+      {
+        "Content-Type": resume.mimetype,
+      },
+    );
+
+    console.log(`[FileService] File uploaded to MinIO successfully`);
+
+    // STEP 6: Save metadata in MongoDB
     const fileEntity: CreateFileData = {
       userId: userId,
       name: fileName,
       originalName: originalName,
-      path: uploadPath,
+
+      // store MinIO object key instead of local filesystem path
+      path: objectName,
+
       size: resume.size,
       format: resume.mimetype,
       hash: fileHash,
@@ -87,6 +113,7 @@ export const resumeFileService = async (
     };
 
     console.log(`[FileService] Saving metadata to database`);
+
     const file = await fileRepository.createFile(fileEntity);
 
     if (!file) {
@@ -96,22 +123,25 @@ export const resumeFileService = async (
       };
     }
 
-    console.log(`[FileService] Upload completed successfully. File ID: ${file.id}`);
+    console.log(
+      `[FileService] Upload completed successfully. File ID: ${file.id}`,
+    );
 
-    // STEP 7: Return success response
+    // STEP 7: Return response
     return {
       success: true,
       message: "Resume file uploaded successfully",
       data: {
         fileId: file.id,
-        fileName: fileName,
-        filePath: `/${uploadPath}`,
-        fileHash: fileHash,
+        fileName,
+        filePath: objectName,
+        fileHash,
         isDuplicate: false,
       },
     };
   } catch (err: any) {
     console.error(`[FileService] Error: ${err.message}`);
+
     return {
       success: false,
       message: `Error uploading resume: ${err.message}`,
