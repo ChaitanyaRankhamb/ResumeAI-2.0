@@ -103,7 +103,7 @@ const fileSchema = new Schema<FileDocument>(
 fileSchema.index({ userId: 1, hash: 1 }, { unique: true });
 
 // Single index on hash for quick lookups
-fileSchema.index({ userId: 1 }, { unique: true });
+fileSchema.index({ hash: 1 });
 
 export const FileModel = mongoose.model<FileDocument>(
   "uploadedfile",
