@@ -2,7 +2,6 @@ import { userRepository } from "../../../database/mongo/user/userModelRepo";
 import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
 import { resumeFileService } from "./file.service";
-import { Multer } from "multer";
 import { resumeParseService } from "./parse.service";
 import { File } from "../../../entities/files/file";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
@@ -32,10 +31,17 @@ export const uploadResumeService = async (
     const fileResult = await resumeFileService(userId, resume);
     console.log("File result:", fileResult);
 
+    if (!fileResult.success) {
+      return {
+        success: false,
+        message: fileResult.message,
+      };
+    }
+
     if (fileResult.success && fileResult.data?.isDuplicate) {
       // return resume analyzed data from redis
       const cachedAnalyzedData = await redisClient.get(
-        `resume:${fileResult.data?.hash}`,
+        `resume:${fileResult.data?.fileHash}`,
       );
       console.log("Cache lookup for analyzed data:", cachedAnalyzedData);
       if (cachedAnalyzedData) {
