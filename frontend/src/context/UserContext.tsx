@@ -1,6 +1,6 @@
 "use client";
 
-import { getMe, logoutApi } from "@/components/api/authApi";
+import { logoutApi } from "@/components/api/authApi";
 import { fetchapi } from "@/lib/refresh-user";
 import React, { createContext, useContext, useState, useEffect } from "react";
 
@@ -31,7 +31,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({
   // Fetch user
   const fetchUser = async () => {
     try {
-      const response = await fetchapi("http://localhost:5000/auth/me", {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const response = await fetchapi(`${apiBaseUrl}/auth/me`, {
         method: "GET",
       });
 
