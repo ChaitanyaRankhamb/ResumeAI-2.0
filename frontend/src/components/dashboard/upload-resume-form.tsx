@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Upload, FileText } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { BrowsedFile } from "./upload-resume-types";
 
@@ -35,7 +35,7 @@ export function UploadResumeForm({
         <div className="relative flex flex-col items-center justify-center space-y-6">
           <div className="relative">
             <div className="p-6 rounded-2xl bg-linear-to-br from-blue-500 to-purple-600 shadow-xl">
-              <Upload className="w-8 h-8 text-white" />
+
             </div>
           </div>
 
@@ -60,7 +60,7 @@ export function UploadResumeForm({
             <div className="w-full p-4 rounded-2xl bg-linear-to-r from-slate-50 to-blue-50 dark:from-slate-700 dark:to-slate-600 border border-slate-200/50 dark:border-slate-600 shadow-lg animate-in fade-in slide-in-from-left-2 duration-500">
               <div className="flex items-center justify-between gap-4">
                 <div className="p-3 rounded-xl bg-white dark:bg-slate-800 shadow-md border border-slate-200/50 dark:border-slate-600">
-                  <FileText className="w-6 h-6 text-slate-600 dark:text-slate-300" />
+
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 dark:text-white truncate">

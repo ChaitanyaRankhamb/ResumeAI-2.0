@@ -13,7 +13,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { useUser } from "@/context/UserContext";
 import { getAvatarColor } from "@/getAvatarColor";
 import { useRouter } from "next/navigation";
-import { LogIn, LogOut, Settings, ShieldCheck, User } from "lucide-react";
+
 import Link from "next/link";
 
 export function DashboardNavbar() {
@@ -30,7 +30,7 @@ export function DashboardNavbar() {
         {/* Logo */}
         <div className="flex items-center gap-2">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <ShieldCheck className="h-6 w-6 text-primary" />
+
             <span className="inline-block font-bold text-xl tracking-tight">
               ResumeAI
             </span>
@@ -100,12 +100,12 @@ export function DashboardNavbar() {
               {isLogged && (
                 <>
                   <DropdownMenuItem onClick={() => router.push("/profile")}>
-                    <User className="mr-2 h-4 w-4" />
+
                     <span>Profile</span>
                   </DropdownMenuItem>
 
                   <DropdownMenuItem onClick={() => router.push("/settings")}>
-                    <Settings className="mr-2 h-4 w-4" />
+
                     <span>Settings</span>
                   </DropdownMenuItem>
 
@@ -116,12 +116,12 @@ export function DashboardNavbar() {
               {/* Login / Logout */}
               {isLogged ? (
                 <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
+
                   <span>Log out</span>
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem onClick={() => router.push("/login")}>
-                  <LogIn className="mr-2 h-4 w-4" />
+
                   <span>Login</span>
                 </DropdownMenuItem>
               )}

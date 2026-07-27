@@ -136,8 +136,9 @@ export function useUploadResume() {
     });
 
     try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
       const response = await fetchapi(
-        `http://localhost:5000/report/download/${uploadedFile.fileId}`,
+        `${apiBaseUrl}/report/download/${uploadedFile.fileId}`,
         {
           method: "GET",
         },

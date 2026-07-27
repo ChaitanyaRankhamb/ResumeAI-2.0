@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Loader2 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -30,7 +30,7 @@ export function UploadedFileStatus({
           {/* File Info */}
           <div className="flex items-start gap-3">
             <div className="p-2 rounded-lg bg-muted/60 border border-border">
-              <FileText className="w-5 h-5 text-muted-foreground" />
+
             </div>
 
             <div className="space-y-0.5">
@@ -53,7 +53,7 @@ export function UploadedFileStatus({
           >
             {uploadedFile.status === "analyzing" ? (
               <>
-                <Loader2 className="w-3 h-3 animate-spin" />
+
                 Analyzing
               </>
             ) : (
