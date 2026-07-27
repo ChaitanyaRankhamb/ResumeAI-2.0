@@ -1,17 +1,11 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useForm } from "@tanstack/react-form";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { SuccessModal } from "@/components/success-model";
-import { registerUser, loginWithGoogle } from "@/components/api/authApi";
-import { checkUsernameAvailability } from "@/components/api/usernameApi";
-import { toast } from "sonner";
-import debounce from "lodash/debounce";
+import { loginWithGoogle } from "@/components/api/authApi";
 import { GoogleIcon } from "@/icons/google.icon";
 import { useRegisterForm } from "./useRegistrationFrom";
 import { formSchema } from "./constants";
