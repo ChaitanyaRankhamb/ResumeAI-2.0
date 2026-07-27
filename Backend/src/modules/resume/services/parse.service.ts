@@ -1,6 +1,6 @@
 import fs from "fs";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
+import { PDFParse } from "pdf-parse";
 import textract from "textract";
 import { UserId } from "../../../entities/user/userId";
 
@@ -89,8 +89,17 @@ export const resumeParseService = async (
       };
     }
 
-    // Optional: clean text
-    parsedText = parsedText.replace(/\s+/g, " ").trim();
+    // BUG FIX #3: The original regex (/\s+/g, " ") collapsed ALL whitespace
+    // including newlines into a single space, turning the resume into one
+    // flat wall of text. Section headings like "PROJECTS" or "Experience"
+    // lost their visual separation, making it much harder for the AI to
+    // detect where one section ends and another begins.
+    // Fix: only collapse horizontal whitespace (spaces/tabs), preserve newlines,
+    // and limit consecutive blank lines to two so structure is readable.
+    parsedText = parsedText
+      .replace(/[^\S\n]+/g, " ")   // collapse spaces/tabs → single space, keep \n
+      .replace(/\n{3,}/g, "\n\n")  // max 2 consecutive blank lines
+      .trim();
 
     return {
       success: true,

@@ -1,10 +1,9 @@
 import { normalizeDegree } from "../mappers/degree.mapper";
+import { formatResumeYear } from "./date.helper";
 
 export function getYear(date?: string | null): number | null {
-  if (!date) return null;
-
-  const d = new Date(date);
-  return isNaN(d.getTime()) ? null : d.getFullYear();
+  const year = formatResumeYear(date);
+  return year ? Number(year) : null;
 }
 
 export function getDegreeLevel(degree?: string | null): string | null {

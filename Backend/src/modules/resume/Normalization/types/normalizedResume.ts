@@ -1,4 +1,4 @@
-// 🔹 Root Type
+// ðŸ”¹ Root Type
 export interface ResumeStructuredData {
   identity: Identity;
   summary: string | null;

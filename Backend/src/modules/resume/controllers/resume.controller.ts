@@ -1,8 +1,8 @@
 import { NextFunction, Response } from "express";
-import { AuthRequest } from "../../../middlewares/auth.middleware";
-import { AppError } from "../../../Error/appError";
-import { uploadResumeService } from "../services/resume.service";
 import { UserId } from "../../../entities/user/userId";
+import { AppError } from "../../../Error/appError";
+import { AuthRequest } from "../../../middlewares/auth.middleware";
+import { uploadResumeService } from "../services/resume.service";
 
 const ALLOWED_TYPES = [
   "application/pdf",
@@ -52,7 +52,7 @@ export const uploadResumeController = async (
 
     // send error response
     if (result && !result.success) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         message: result.message,
       });

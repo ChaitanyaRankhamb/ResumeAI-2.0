@@ -1,10 +1,9 @@
+import redisClient from "../../../config/redis.connection";
 import { User } from "../../../entities/user/user";
 import {
   generateAccessToken,
   generateRefreshToken,
 } from "../../../utils/jwt.utils";
-import redisClient from "../../../config/redis.connection";
-import { userRepository } from "../../../database/mongo/user/userModelRepo";
 
 /**
  * Handles token generation after successful Google OAuth login

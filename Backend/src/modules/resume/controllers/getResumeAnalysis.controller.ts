@@ -1,9 +1,9 @@
 import { NextFunction, Response } from "express";
+import redisClient from "../../../config/redis.connection";
+import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
+import { File } from "../../../entities/files/file";
 import { AppError } from "../../../Error/appError";
 import { AuthRequest } from "../../../middlewares/auth.middleware";
-import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
-import redisClient from "../../../config/redis.connection";
-import { File } from "../../../entities/files/file";
 
 interface Params {
   fileId: string;

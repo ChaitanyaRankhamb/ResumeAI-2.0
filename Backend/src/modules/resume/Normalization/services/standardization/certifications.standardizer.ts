@@ -1,6 +1,6 @@
-import { Certification } from "../../types/normalizedResume";
-import { ResumeStructuredData } from "../../types/normalizedResume";
+import { Certification, ResumeStructuredData } from "../../types/normalizedResume";
 import { CanonicalResume } from "../canonicalization.service";
+import { formatResumeMonth, formatResumeYear } from "../../helpers/date.helper";
 
 /**
  * Certifications Standardizer
@@ -13,32 +13,24 @@ import { CanonicalResume } from "../canonicalization.service";
 export function standardizeCertifications(
   certifications: CanonicalResume["certifications"],
 ): ResumeStructuredData["certifications"] {
-  // Convert to Title Case for names
-  const toTitleCase = (value?: string | null): string | null => {
+  const toDisplayCase = (value?: string | null): string | null => {
     if (!value) return null;
     return value
-      .toLowerCase()
       .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => {
+        if (/[A-Z]{2,}|[a-z][A-Z]|\./.test(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
       .join(" ");
   };
 
-  // Format date to ISO string (YYYY-MM-DD) or null
   const formatDate = (date?: string | null): string | null => {
-    if (!date) return null;
-
-    // Try to parse the date
-    const parsed = new Date(date);
-
-    if (isNaN(parsed.getTime())) return null;
-
-    // Format as YYYY-MM-DD
-    return parsed.toISOString().split("T")[0];
+    return formatResumeMonth(date) ?? formatResumeYear(date);
   };
 
   return certifications.map((cert: Certification) => ({
-    name: toTitleCase(cert.name),
-    issuer: toTitleCase(cert.issuer),
+    name: toDisplayCase(cert.name),
+    issuer: toDisplayCase(cert.issuer),
     issueDate: formatDate(cert.issueDate),
   }));
 }

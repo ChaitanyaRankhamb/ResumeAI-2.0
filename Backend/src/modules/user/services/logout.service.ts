@@ -1,6 +1,5 @@
-import { userRepository } from "../../../database/mongo/user/userModelRepo";
 import redisClient from "../../../config/redis.connection";
-import { UserId } from "../../../entities/user/userId";
+import { userRepository } from "../../../database/mongo/user/userModelRepo";
 
 /**
  * Handles user logout logic

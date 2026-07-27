@@ -1,11 +1,10 @@
-import bcrypt from "bcryptjs";
+import redisClient from "../../../config/redis.connection";
 import { userRepository } from "../../../database/mongo/user/userModelRepo";
 import { AppError } from "../../../Error/appError";
 import {
   generateAccessToken,
   generateRefreshToken,
 } from "../../../utils/jwt.utils";
-import redisClient from "../../../config/redis.connection";
 
 export const loginService = async (email: string) => {
   const user = await userRepository.findUserByEmail(email);

@@ -1,5 +1,5 @@
 export const skillToDomainMap: Record<string, string> = {
-  // 🌐 Frontend
+  // ðŸŒ Frontend
   react: "Frontend",
   angular: "Frontend",
   vue: "Frontend",
@@ -13,7 +13,7 @@ export const skillToDomainMap: Record<string, string> = {
   javascript: "Frontend",
   typescript: "Frontend",
 
-  // ⚙️ Backend
+  // âš™ï¸ Backend
   nodejs: "Backend",
   express: "Backend",
   nestjs: "Backend",
@@ -28,7 +28,7 @@ export const skillToDomainMap: Record<string, string> = {
   laravel: "Backend",
   aspnet: "Backend",
 
-  // 🗄 Database
+  // ðŸ—„ Database
   mongodb: "Database",
   mysql: "Database",
   postgresql: "Database",
@@ -38,7 +38,7 @@ export const skillToDomainMap: Record<string, string> = {
   oracle: "Database",
   cassandra: "Database",
 
-  // ☁️ DevOps / Cloud
+  // â˜ï¸ DevOps / Cloud
   docker: "DevOps",
   kubernetes: "DevOps",
   aws: "Cloud",
@@ -51,7 +51,7 @@ export const skillToDomainMap: Record<string, string> = {
   ci: "DevOps",
   cd: "DevOps",
 
-  // 🤖 AI / ML / Data Science
+  // ðŸ¤– AI / ML / Data Science
   python: "Programming",
   numpy: "Data Science",
   pandas: "Data Science",
@@ -64,7 +64,7 @@ export const skillToDomainMap: Record<string, string> = {
   opencv: "Computer Vision",
   nlp: "Natural Language Processing",
 
-  // 💻 Programming Languages
+  // ðŸ’» Programming Languages
   java: "Programming",
   c: "Programming",
   cpp: "Programming",
@@ -75,14 +75,14 @@ export const skillToDomainMap: Record<string, string> = {
   swift: "Programming",
   dart: "Programming",
 
-  // 📱 Mobile Development
+  // ðŸ“± Mobile Development
   android: "Mobile Development",
   ios: "Mobile Development",
   reactnative: "Mobile Development",
   flutter: "Mobile Development",
   xamarin: "Mobile Development",
 
-  // 🔐 Cybersecurity
+  // ðŸ” Cybersecurity
   kali: "Cybersecurity",
   metasploit: "Cybersecurity",
   burpsuite: "Cybersecurity",
@@ -90,7 +90,7 @@ export const skillToDomainMap: Record<string, string> = {
   nmap: "Cybersecurity",
   ethicalhacking: "Cybersecurity",
 
-  // 🧪 Testing
+  // ðŸ§ª Testing
   junit: "Testing",
   mocha: "Testing",
   chai: "Testing",
@@ -98,13 +98,13 @@ export const skillToDomainMap: Record<string, string> = {
   cypress: "Testing",
   jest: "Testing",
 
-  // 🧩 API / Integration
+  // ðŸ§© API / Integration
   rest: "API Development",
   graphql: "API Development",
   postman: "API Development",
   swagger: "API Development",
 
-  // 🎮 Misc / Others
+  // ðŸŽ® Misc / Others
   git: "Version Control",
   github: "Version Control",
   gitlab: "Version Control",

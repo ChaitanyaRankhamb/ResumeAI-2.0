@@ -1,8 +1,8 @@
-import { ResumeStructuredData } from "../../types/normalizedResume";
 import {
   calculateProjectComplexity,
   extractProjectSkills,
 } from "../../helpers/enrich.helpers";
+import { ResumeStructuredData } from "../../types/normalizedResume";
 
 /**
  * Projects Enrichment Service

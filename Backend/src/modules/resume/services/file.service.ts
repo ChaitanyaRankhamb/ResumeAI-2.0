@@ -1,8 +1,8 @@
-import { UserId } from "../../../entities/user/userId";
-import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
-import { CreateFileData } from "../../../entities/files/fileRepo";
 import { createHash, randomUUID } from "crypto";
 import minioClient from "../../../config/minio.connection";
+import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
+import { CreateFileData } from "../../../entities/files/fileRepo";
+import { UserId } from "../../../entities/user/userId";
 
 interface FileServiceResponse {
   success: boolean;
@@ -37,6 +37,14 @@ export const resumeFileService = async (
     const fileHash = hash.digest("hex");
 
     console.log(`[FileService] File hash: ${fileHash}`);
+
+    // Ensure the generated hash is structurally valid (64-character SHA-256 hex string)
+    if (!fileHash || fileHash.length !== 64) {
+      return {
+        success: false,
+        message: "Invalid or empty file hash generated. Upload aborted.",
+      };
+    }
 
     // STEP 3: Check duplicate file
     console.log(

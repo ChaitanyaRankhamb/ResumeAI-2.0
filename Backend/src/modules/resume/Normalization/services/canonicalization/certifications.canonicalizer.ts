@@ -19,13 +19,13 @@ export function canonicalizeCertifications(
 ): Certification[] {
   const sanitized = sanitizeArray(certifications);
 
-  // Helper → clean string fields
+  // Helper â†’ clean string fields
   const cleanString = (value: any): string | null => {
     if (!value) return null;
     return value.toString().trim().replace(/\s+/g, " ");
   };
 
-  // Helper → normalize date fields (basic validation only)
+  // Helper â†’ normalize date fields (basic validation only)
   const normalizeDate = (date: any): string | null => {
     if (!date) return null;
     return date.toString().trim();

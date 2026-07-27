@@ -1,7 +1,7 @@
 import fetch from "node-fetch";
-import { SYSTEM_PROMPT } from "../../../prompts/structuredData.system.prompt";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { File } from "../../../entities/files/file";
+import { SYSTEM_PROMPT } from "../../../prompts/structuredData.system.prompt";
 
 interface GenerateStructuredDataResponse {
   success: boolean;
@@ -39,8 +39,13 @@ export const generateStructuredData = async (
     }
 
     const modelName = process.env.OPENROUTER_MODEL || "gpt-4o-mini";
-    const inputData = `${SYSTEM_PROMPT}\n\nResume Text:\n${parsedText}`;
 
+    // BUG FIX #2: Previously, SYSTEM_PROMPT was injected TWICE —
+    // once as the system role message AND again prepended to the user message.
+    // This wasted ~600 tokens per request, shrinking the output budget and
+    // causing truncated / incomplete JSON responses (especially for resumes
+    // with many projects). Now the system message holds the prompt, and the
+    // user message carries ONLY the resume text.
     const messages = [
       {
         role: "system",
@@ -48,8 +53,8 @@ export const generateStructuredData = async (
       },
       {
         role: "user",
-        content: inputData,
-      }
+        content: `Resume Text:\n${parsedText}`,
+      },
     ]
 
     const response = await fetch(OPENROUTER_URL, {
@@ -92,9 +97,28 @@ export const generateStructuredData = async (
       };
     }
 
+    // BUG FIX #1 (CRITICAL): GPT-4o-mini (and most OpenRouter models) wrap
+    // their JSON output in markdown code fences by default:
+    //   ```json
+    //   { "identity": {...}, "projects": [...] }
+    //   ```
+    // Calling JSON.parse() on fenced text throws a SyntaxError, causing
+    // structuredData to stay undefined. The service then returned
+    // { success: false, data: undefined }, but resume.service.ts only logged
+    // a warning and continued — so validateStructuredData(undefined) silently
+    // returned { projects: [], ... }, making projects always empty.
+    // Fix: strip any fences before parsing, mirroring what
+    // generateResumeAnalyzedData.service.ts already does correctly.
+    let cleanText = text.trim();
+    if (cleanText.startsWith("```json")) {
+      cleanText = cleanText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (cleanText.startsWith("```")) {
+      cleanText = cleanText.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
+
     let structuredData;
     try {
-      structuredData = JSON.parse(text);
+      structuredData = JSON.parse(cleanText); // parse the fence-stripped text
     } catch (parseError) {
       return {
         success: false,

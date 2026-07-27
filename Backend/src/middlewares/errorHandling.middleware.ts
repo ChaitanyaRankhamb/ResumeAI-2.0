@@ -1,11 +1,11 @@
+import { NextFunction, Request, Response } from "express";
 import { AppError } from "../Error/appError";
-import { Request, Response, NextFunction } from "express";
 
 export const errorHandler = (
   err: AppError | Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction,
 ) => {
   let statusCode: number = 500;
   let message: string = "Internal Server Error";
@@ -17,6 +17,10 @@ export const errorHandler = (
   } else {
     // fallback for unknown errors
     message = err.message || message;
+  }
+
+  if (res.headersSent) {
+    return;
   }
 
   res.status(statusCode).json({

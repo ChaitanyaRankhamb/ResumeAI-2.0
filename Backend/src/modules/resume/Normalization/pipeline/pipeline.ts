@@ -1,5 +1,5 @@
-import { normalizeResume } from "./resumeNormalizer";
 import { EnrichedResumeData, ResumeStructuredData } from "../types/normalizedResume";
+import { normalizeResume } from "./resumeNormalizer";
 
 /**
  * Pipeline Response Interface

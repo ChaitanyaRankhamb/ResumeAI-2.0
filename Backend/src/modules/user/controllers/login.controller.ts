@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { loginService } from "../services/login.service";
+import { NextFunction, Request, Response } from "express";
 import { loginValidation } from "../../../validations/user.login.validation";
+import { loginService } from "../services/login.service";
 
 /**
  * Controller to handle user login requests and set tokens
@@ -20,16 +20,10 @@ export const loginController = async (
     console.log("validated Email", validation);
 
     // take user and tokens from service
-    const { user, accessToken, refreshToken } = await loginService(
+    const { accessToken, refreshToken } = await loginService(
       validation.email,
     );
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    };
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,

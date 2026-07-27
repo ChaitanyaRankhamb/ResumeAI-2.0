@@ -1,7 +1,5 @@
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
 import { refreshService } from "../services/refresh.service";
-import redisClient from "../../../config/redis.connection";
-import jwt from "jsonwebtoken";
 
 /**
  * Controller to handle token refresh requests.
@@ -31,12 +29,6 @@ export const refreshController = async (
     // 5. Store the new access token in the same cookie that authMiddleware reads.
     // Without this, the retried request still sends the old (expired) cookie,
     // and refresh appears to "not work".
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    };
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,

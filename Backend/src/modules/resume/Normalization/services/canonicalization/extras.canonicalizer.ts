@@ -16,7 +16,7 @@ import { sanitizeArray } from "../sanitization.service";
  * @returns Cleaned and normalized extras object
  */
 export function canonicalizeExtras(extras: any): Extras {
-  // Helper → normalize generic string arrays with deduplication
+  // Helper â†’ normalize generic string arrays with deduplication
   const normalizeStringArray = (input: any): string[] => {
     return Array.from(
       new Set(

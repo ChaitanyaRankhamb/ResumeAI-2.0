@@ -1,4 +1,3 @@
-import { Identity } from "../../types/normalizedResume";
 import { ResumeStructuredData } from "../../types/normalizedResume";
 import { CanonicalResume } from "../canonicalization.service";
 
@@ -46,18 +45,9 @@ function standardizeEmail(email?: string | null): string | null {
 function standardizePhone(phone?: string | null): string | null {
   if (!phone) return null;
 
-  // Already has country code
-  if (phone.startsWith("+")) {
-    return phone;
-  }
-
-  // Has country code but missing '+'
-  if (phone.startsWith("91")) {
-    return `+${phone}`;
-  }
-
-  // Default: add +91
-  return `+91${phone}`;
+  // Production point: the canonicalization helper already validates and
+  // returns E.164 when possible; do not hardcode +91 here for global resumes.
+  return phone.startsWith("+") ? phone : null;
 }
 
 // make it standard, if the address data is in bad language, make it correct in enrich service.

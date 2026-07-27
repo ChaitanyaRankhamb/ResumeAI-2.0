@@ -1,25 +1,41 @@
-import { SkillMapper } from "..";
 import { sanitizeArray, sanitizeString } from "../services/sanitization.service";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
-export function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, "").replace(/^0/, "+91");
+export function normalizePhone(phone: string, defaultCountry: "IN" | "US" = "IN"): string | null {
+  const cleaned = sanitizeString(phone, "", 80);
+  if (!cleaned) return null;
+
+  const parsed = parsePhoneNumberFromString(cleaned, defaultCountry);
+  if (parsed?.isValid()) {
+    return parsed.number;
+  }
+
+  return null;
 }
 
 // make it http to https and remove trailing slash
-export function normalizeUrl(url: string, type?: string): string {
-  let clean = url.trim().toLowerCase();
+export function normalizeUrl(url: string): string | null {
+  const raw = sanitizeString(url, "", 500);
+  if (!raw) return null;
 
-  if (!clean.startsWith("http")) {
-    clean = "https://" + clean;
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+
+    parsed.protocol = "https:";
+    parsed.hostname = parsed.hostname.toLowerCase();
+    parsed.hash = "";
+
+    return parsed.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
   }
-
-  clean = clean.replace(/\/+$/, ""); // remove trailing /
-
-  return clean;
 }
 
 export function normalizeLocation(location: string) {
-  return location.trim();
+  return sanitizeString(location, "", 300) || null;
 }
 
 export function normalizeEmail(email: string): string {
@@ -53,8 +69,8 @@ export function canonicalizeSkillArray(input: any): string[] {
       s
         .toLowerCase()
         .trim()
-        .replace(/\s+/g, " ")     // collapse multiple spaces → single space
-        .replace(/[-_]/g, " ")    // normalize separators (node-js → node js)
+        .replace(/\s+/g, " ")     // collapse multiple spaces â†’ single space
+        .replace(/[-_]/g, " ")    // normalize separators (node-js â†’ node js)
     )
 
     // Remove empty again after cleanup

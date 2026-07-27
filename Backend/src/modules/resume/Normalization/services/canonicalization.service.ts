@@ -1,15 +1,15 @@
-import { sanitizeArray } from "./sanitization.service";
 import { ResumeStructuredData } from "../types/normalizedResume";
+import { sanitizeArray } from "./sanitization.service";
 
 // Import sub-canonicalizers
 import {
-  canonicalizeIdentity,
-  canonicalizeSkills,
-  canonicalizeExperience,
-  canonicalizeProjects,
-  canonicalizeEducation,
   canonicalizeCertifications,
+  canonicalizeEducation,
+  canonicalizeExperience,
   canonicalizeExtras,
+  canonicalizeIdentity,
+  canonicalizeProjects,
+  canonicalizeSkills,
 } from "./canonicalization";
 
 /**
@@ -26,7 +26,7 @@ export type CanonicalResume = ResumeStructuredData;
  * @returns Fully canonicalized resume with normalized fields
  */
 export function canonicalizeResume(rawResume: any): CanonicalResume {
-  // Helper → clean summary text
+  // Helper â†’ clean summary text
   const cleanSummary = (summary: any): string | null => {
     if (!summary) return null;
 
@@ -36,7 +36,7 @@ export function canonicalizeResume(rawResume: any): CanonicalResume {
     return cleaned.length < 10 ? null : cleaned;
   };
 
-  // Helper → normalize achievements array
+  // Helper â†’ normalize achievements array
   const normalizeAchievements = (achievements: any): string[] => {
     return Array.from(
       new Set(

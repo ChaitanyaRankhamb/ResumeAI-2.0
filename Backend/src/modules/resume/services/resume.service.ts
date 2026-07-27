@@ -1,15 +1,15 @@
+import redisClient from "../../../config/redis.connection";
+import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { userRepository } from "../../../database/mongo/user/userModelRepo";
+import { File } from "../../../entities/files/file";
 import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
-import { resumeFileService } from "./file.service";
-import { resumeParseService } from "./parse.service";
-import { File } from "../../../entities/files/file";
-import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
-import { generateStructuredData } from "./generateStructureData.service";
-import { generateResumeAnalyzedData } from "./generateResumeAnalyzedData.service";
 import { validateStructuredData } from "../../../validations/resumeStructureData.validation";
 import { processResume } from "../Normalization";
-import redisClient from "../../../config/redis.connection";
+import { resumeFileService } from "./file.service";
+import { generateResumeAnalyzedData } from "./generateResumeAnalyzedData.service";
+import { generateStructuredData } from "./generateStructureData.service";
+import { resumeParseService } from "./parse.service";
 interface responseData {
   success: boolean;
   message: string;
@@ -29,7 +29,6 @@ export const uploadResumeService = async (
 
     // service that store the resume file in upload folder & create file doc
     const fileResult = await resumeFileService(userId, resume);
-    console.log("File result:", fileResult);
 
     if (!fileResult.success) {
       return {
@@ -38,67 +37,71 @@ export const uploadResumeService = async (
       };
     }
 
-    if (fileResult.success && fileResult.data?.isDuplicate) {
-      // return resume analyzed data from redis
-      const cachedAnalyzedData = await redisClient.get(
-        `resume:${fileResult.data?.fileHash}`,
-      );
-      console.log("Cache lookup for analyzed data:", cachedAnalyzedData);
-      if (cachedAnalyzedData) {
-        const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
+    // if (fileResult.success && fileResult.data?.isDuplicate) {
+    //   // return resume analyzed data from redis
+    //   const cachedAnalyzedData = await redisClient.get(
+    //     `resume:${fileResult.data?.fileHash}`,
+    //   );
+    //   if (cachedAnalyzedData) {
+    //     const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
 
-        // Validate cached data has required fields
-        if (
-          !parsedAnalyzedData.skillInsights ||
-          !parsedAnalyzedData.skillInsights.allSkills ||
-          !Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
-        ) {
-          console.error(
-            "Invalid cached analyzed data: missing or invalid skillInsights",
-            parsedAnalyzedData,
-          );
-          // If cached data is invalid, continue to process (don't return invalid data)
-        } else {
-          // Ensure the file document has the analyzed data
-          const file = await fileRepository.findFileById(
-            fileResult.data?.fileId,
-          );
-          if (file) {
-            const updatedFile = new File(
-              file.id,
-              file.userId,
-              file.getName(),
-              file.getOriginalName(),
-              file.getPath(),
-              file.getSize(),
-              file.getHash(),
-              file.getFormat(),
-              file.uploadedAt,
-              file.getParseText(),
-              file.getStructuredData(),
-              parsedAnalyzedData, // Save to file document
-            );
-            await fileRepository.updateFile(updatedFile);
-          }
+    //     // Validate cached data has required fields
+    //     if (
+    //       !parsedAnalyzedData.skillInsights ||
+    //       !parsedAnalyzedData.skillInsights.allSkills ||
+    //       !Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
+    //     ) {
+    //       console.error(
+    //         "Invalid cached analyzed data: missing or invalid skillInsights",
+    //       );
+    //       // If cached data is invalid, continue to process (don't return invalid data)
+    //     } else {
+    //       // Ensure the file document has the analyzed data
+    //       const file = await fileRepository.findFileById(
+    //         fileResult.data?.fileId,
+    //       );
+    //       if (file) {
+    //         const updatedFile = new File(
+    //           file.id,
+    //           file.userId,
+    //           file.getName(),
+    //           file.getOriginalName(),
+    //           file.getPath(),
+    //           file.getSize(),
+    //           file.getHash(),
+    //           file.getFormat(),
+    //           file.uploadedAt,
+    //           file.getParseText(),
+    //           file.getStructuredData(),
+    //           parsedAnalyzedData, // Save to file document
+    //         );
+    //         await fileRepository.updateFile(updatedFile);
+    //       }
 
-          return {
-            success: true,
-            message: "Resume analyzed data retrieved from cache",
-            data: {
-              fileId: fileResult.data?.fileId,
-              hash: fileResult.data?.hash,
-              analyzedData: parsedAnalyzedData,
-            },
-          };
-        }
-      }
-    }
+    //       return {
+    //         success: true,
+    //         message: "Resume analyzed data retrieved from cache",
+    //         data: {
+    //           fileId: fileResult.data?.fileId,
+    //           hash: fileResult.data?.hash,
+    //           analyzedData: parsedAnalyzedData,
+    //         },
+    //       };
+    //     }
+    //   }
+    // }
 
     // parse the resume file and extract info
     const parseResult = await resumeParseService(userId, resume);
 
     const parsedText = parseResult.data?.rawText;
-    console.log("Parsed result:", parsedText);
+    // Production point: never log parsed resume text because it contains PII.
+    // Log only operational metadata needed for debugging.
+    console.info("Resume parsed", {
+      userId: userId.toString(),
+      fileId: fileResult.data?.fileId,
+      textLength: parsedText?.length ?? 0,
+    });
 
     // Update the file with parsed text if parsing was successful
     if (fileResult.success) {
@@ -142,10 +145,7 @@ export const uploadResumeService = async (
 
     if (!structuredResultData.success) {
       // Log warning but don't fail the upload
-      console.warn(
-        "Failed to generate structured data:",
-        structuredResultData.message,
-      );
+      console.warn("Failed to generate structured data:", structuredResultData.message);
     }
 
     // validate structured data and generate analyzed data if valid
@@ -201,7 +201,7 @@ export const uploadResumeService = async (
       },
     };
   } catch (error: any) {
-    console.error("Error in uploadResumeService:", error);
+    console.error("Error in uploadResumeService:", error?.message || error);
 
     return {
       success: false,

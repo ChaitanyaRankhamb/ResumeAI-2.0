@@ -1,7 +1,7 @@
-import { Project } from "../../types/normalizedResume";
-import { SkillMapper } from "../../mappers/skill.mapper";
-import { sanitizeArray } from "../sanitization.service";
 import { normalizeUrl } from "../../helpers/canonicalization.helper";
+import { SkillMapper } from "../../mappers/skill.mapper";
+import { Project } from "../../types/normalizedResume";
+import { sanitizeArray } from "../sanitization.service";
 
 /**
  * Projects Canonicalizer
@@ -22,19 +22,19 @@ export function canonicalizeProjects(projects: any): Project[] {
 
   const sanitized = sanitizeArray(projects);
 
-  // Helper → clean string fields
+  // Helper â†’ clean string fields
   const cleanString = (value: any): string | null => {
     if (!value) return null;
     return value.toString().trim().replace(/\s+/g, " ");
   };
 
-  // Helper → normalize URL fields
-  const normalizeUrlField = (url: any, type: string): string | null => {
+  // Helper â†’ normalize URL fields
+  const normalizeUrlField = (url: any): string | null => {
     if (!url) return null;
-    return normalizeUrl(url, type);
+    return normalizeUrl(url);
   };
 
-  // Helper → normalize technologies using SkillMapper
+  // Helper â†’ normalize technologies using SkillMapper
   const normalizeTechnologies = (technologies: any): string[] => {
     return Array.from(
       new Set(
@@ -46,7 +46,7 @@ export function canonicalizeProjects(projects: any): Project[] {
     );
   };
 
-  // Helper → normalize generic string arrays
+  // Helper â†’ normalize generic string arrays
   const normalizeArray = (input: any): string[] => {
     return Array.from(
       new Set(
@@ -65,8 +65,8 @@ export function canonicalizeProjects(projects: any): Project[] {
         description: cleanString(proj?.description),
 
         // Normalize URLs
-        github: normalizeUrlField(proj?.github, "github"),
-        live: normalizeUrlField(proj?.live, "portfolio"),
+        github: normalizeUrlField(proj?.github),
+        live: normalizeUrlField(proj?.live),
 
         // Normalize arrays using SkillMapper for technologies
         technologies: normalizeTechnologies(proj?.technologies),

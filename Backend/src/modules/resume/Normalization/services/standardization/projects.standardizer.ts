@@ -1,5 +1,4 @@
-import { Project } from "../../types/normalizedResume";
-import { ResumeStructuredData } from "../../types/normalizedResume";
+import { Project, ResumeStructuredData } from "../../types/normalizedResume";
 import { CanonicalResume } from "../canonicalization.service";
 
 /**
@@ -14,13 +13,14 @@ import { CanonicalResume } from "../canonicalization.service";
 export function standardizeProjects(
   projects: CanonicalResume["projects"],
 ): ResumeStructuredData["projects"] {
-  // Convert to Title Case for names and descriptions
-  const toTitleCase = (value?: string | null): string | null => {
+  const toDisplayCase = (value?: string | null): string | null => {
     if (!value) return null;
     return value
-      .toLowerCase()
       .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => {
+        if (/[A-Z]{2,}|[a-z][A-Z]|\./.test(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
       .join(" ");
   };
 
@@ -61,12 +61,14 @@ export function standardizeProjects(
     };
 
     const lowerTech = tech.toLowerCase();
-    return techMappings[lowerTech] || toTitleCase(tech) || tech;
+    return techMappings[lowerTech] || toDisplayCase(tech) || tech;
   };
 
   return projects.map((proj: Project) => ({
-    name: toTitleCase(proj.name),
-    description: toTitleCase(proj.description),
+    name: toDisplayCase(proj.name),
+    // Production point: descriptions are evidence text; preserve extracted
+    // casing instead of rewriting technical acronyms and product names.
+    description: proj.description,
     technologies: (proj.technologies || []).map(normalizeTechnology),
     github: formatUrl(proj.github),
     live: formatUrl(proj.live),

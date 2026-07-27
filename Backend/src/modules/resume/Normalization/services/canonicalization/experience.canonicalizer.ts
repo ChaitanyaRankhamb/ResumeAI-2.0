@@ -16,13 +16,13 @@ import { sanitizeArray } from "../sanitization.service";
 export function canonicalizeExperience(experience: any): Experience[] {
   const sanitized = sanitizeArray(experience);
 
-  // Helper → clean string fields
+  // Helper â†’ clean string fields
   const cleanString = (value: any): string | null => {
     if (!value) return null;
     return value.toString().trim().replace(/\s+/g, " ");
   };
 
-  // Helper → normalize string arrays
+  // Helper â†’ normalize string arrays
   const normalizeArray = (input: any): string[] => {
     return Array.from(
       new Set(
@@ -46,7 +46,7 @@ export function canonicalizeExperience(experience: any): Experience[] {
 
       description: normalizeArray(exp?.description),
 
-      // NO SkillMapper here → just clean raw values
+      // NO SkillMapper here â†’ just clean raw values
       technologies: normalizeArray(exp?.technologies),
 
       achievements: normalizeArray(exp?.achievements),

@@ -17,13 +17,13 @@ export function enrichExperience(
   if (!Array.isArray(experience)) return [];
 
   return experience.map((exp) => {
-    // 🔹 Safe defaults
+    // ðŸ”¹ Safe defaults
     const startDate = exp?.startDate;
     const endDate = exp?.endDate;
     const role = exp?.role ?? "";
     const technologies = exp?.technologies ?? [];
 
-    // 🔹 Duration
+    // ðŸ”¹ Duration
     let durationInMonths: number | undefined = undefined;
 
     if (startDate && endDate) {

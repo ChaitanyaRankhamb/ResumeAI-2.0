@@ -1,7 +1,7 @@
-import { Request, Response, NextFunction } from "express";
-import { handleGoogleLoginService } from "../services/google.service";
+import { NextFunction, Request, Response } from "express";
 import { User } from "../../../entities/user/user";
 import { AppError } from "../../../Error/appError";
+import { handleGoogleLoginService } from "../services/google.service";
 
 export interface googleResponse {
   status: number;
@@ -30,12 +30,6 @@ export const googleCallbackController = async (
     // back to the frontend with the access token in the query params.
     // In production, consider a more secure way to pass tokens. maybe cookies!
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-    };
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,

@@ -91,6 +91,21 @@ EXTRACTION INSTRUCTIONS:
 - Normalize duplicate or repeated data
 - Ignore irrelevant text (headers, footers, page numbers)
 
+// BUG FIX #4: The prompt previously gave no guidance on alternative project
+// section headings, so the AI often missed projects listed under names like
+// "Personal Projects", "Portfolio", or "Academic Projects", or silently
+// merged them into experience entries.
+// Fix: explicitly list known heading aliases and add a hard rule against
+// merging project content into the experience array.
+PROJECT DETECTION RULES:
+- Projects may appear under ANY of these headings (case-insensitive):
+  "Projects", "Personal Projects", "Academic Projects", "Key Projects",
+  "Side Projects", "Portfolio", "Notable Projects", "Work Samples",
+  "Open Source", "Assignments", "College Projects"
+- If an entry has a project name/title AND a description or tech stack,
+  always place it in the "projects" array — never in "experience"
+- Do NOT merge project bullet points into an experience entry's description
+
 FINAL OUTPUT:
 Return ONLY the JSON object.
 `;

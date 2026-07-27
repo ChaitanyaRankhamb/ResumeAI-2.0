@@ -1,5 +1,5 @@
-import { ResumeStructuredData } from "../../types/normalizedResume";
 import { detectDomains } from "../../helpers/enrich.helpers";
+import { ResumeStructuredData } from "../../types/normalizedResume";
 
 /**
  * Skills Enrichment

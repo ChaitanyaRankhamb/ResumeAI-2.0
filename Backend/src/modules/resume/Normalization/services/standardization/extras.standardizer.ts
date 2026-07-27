@@ -1,4 +1,3 @@
-import { Extras } from "../../types/normalizedResume";
 import { ResumeStructuredData } from "../../types/normalizedResume";
 import { CanonicalResume } from "../canonicalization.service";
 

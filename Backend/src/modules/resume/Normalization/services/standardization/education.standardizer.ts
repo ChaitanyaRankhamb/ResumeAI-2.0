@@ -1,6 +1,6 @@
-import { Education } from "../../types/normalizedResume";
-import { ResumeStructuredData } from "../../types/normalizedResume";
+import { Education, ResumeStructuredData } from "../../types/normalizedResume";
 import { CanonicalResume } from "../canonicalization.service";
+import { formatResumeYear } from "../../helpers/date.helper";
 
 /**
  * Education Standardizer
@@ -14,32 +14,20 @@ import { CanonicalResume } from "../canonicalization.service";
 export function standardizeEducation(
   education: CanonicalResume["education"],
 ): ResumeStructuredData["education"] {
-  // Convert to Title Case for names
-  const toTitleCase = (value?: string | null): string | null => {
+  const toDisplayCase = (value?: string | null): string | null => {
     if (!value) return null;
     return value
-      .toLowerCase()
       .split(" ")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .map((word) => {
+        if (/[A-Z]{2,}|[a-z][A-Z]|\./.test(word)) return word;
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
       .join(" ");
   };
 
   // Format year to 4-digit string
   const formatYear = (year?: string | null): string | null => {
-    if (!year) return null;
-
-    // If already 4 digits, return as is
-    if (/^\d{4}$/.test(year)) {
-      return year;
-    }
-
-    // Try to parse and format
-    const parsed = parseInt(year);
-    if (!isNaN(parsed) && parsed >= 1950 && parsed <= 2030) {
-      return parsed.toString();
-    }
-
-    return null;
+    return formatResumeYear(year);
   };
 
   // Normalize degree names for consistency
@@ -81,15 +69,15 @@ export function standardizeEducation(
     };
 
     const lowerDegree = degree.toLowerCase().trim();
-    return degreeMappings[lowerDegree] || toTitleCase(degree);
+    return degreeMappings[lowerDegree] || toDisplayCase(degree);
   };
 
   return education.map((edu: Education) => ({
     level: edu.level,
     degree: normalizeDegree(edu.degree),
-    fieldOfStudy: toTitleCase(edu.fieldOfStudy),
-    institution: toTitleCase(edu.institution),
-    board: toTitleCase(edu.board),
+    fieldOfStudy: toDisplayCase(edu.fieldOfStudy),
+    institution: toDisplayCase(edu.institution),
+    board: toDisplayCase(edu.board),
     startYear: formatYear(edu.startYear),
     endYear: formatYear(edu.endYear),
     grade: edu.grade, // Keep grade as-is, might be standardized in enrichment

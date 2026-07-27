@@ -4,6 +4,7 @@
  */
 
 import { skillToDomainMap } from "../maps/skillDomainMap";
+import { getDatePartsForDuration } from "./date.helper";
 
 /**
  * Calculate duration in months between two dates
@@ -13,17 +14,16 @@ import { skillToDomainMap } from "../maps/skillDomainMap";
  */
 export function calculateDuration(start: string, end: string): number {
   try {
-    const startDate = new Date(start);
-    const endDate =
-      end.toLowerCase() === "present" ? new Date() : new Date(end);
+    const startDate = getDatePartsForDuration(start);
+    const endDate = getDatePartsForDuration(end);
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (!startDate || !endDate) {
       return 0;
     }
 
     const months =
-      (endDate.getFullYear() - startDate.getFullYear()) * 12 +
-      (endDate.getMonth() - startDate.getMonth());
+      (endDate.year - startDate.year) * 12 +
+      (endDate.month - startDate.month);
 
     return Math.max(0, months);
   } catch {
@@ -158,7 +158,6 @@ export function detectExperienceType(role: string): string {
  * @returns Object with expiry status and days remaining
  */
 export function validateCertificationExpiry(
-  issueDate: string | null,
   expiryDate: string | null,
 ): {
   isExpired: boolean;

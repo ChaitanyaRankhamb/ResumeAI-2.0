@@ -1,8 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { logoutService } from "../services/logout.service";
+import { NextFunction, Response } from "express";
 import { AuthRequest } from "../../../middlewares/auth.middleware";
-import redisClient from "../../../config/redis.connection";
-import { UserId } from "../../../entities/user/userId";
+import { logoutService } from "../services/logout.service";
 
 /**
  * Controller to handle user logout requests

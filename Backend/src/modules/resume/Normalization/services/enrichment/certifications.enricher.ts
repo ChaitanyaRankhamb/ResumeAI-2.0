@@ -1,5 +1,4 @@
 import { ResumeStructuredData } from "../../types/normalizedResume";
-import { validateCertificationExpiry } from "../../helpers/enrich.helpers";
 
 /**
  * Certifications Enrichment Service

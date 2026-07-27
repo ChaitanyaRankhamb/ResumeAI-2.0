@@ -1,6 +1,6 @@
 import express from "express";
-import { verifyController } from "./verify.controller";
 import { resendController } from "./resend.controller";
+import { verifyController } from "./verify.controller";
 
 const router = express.Router();
 

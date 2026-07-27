@@ -1,12 +1,12 @@
 import express from "express";
 import passport from "passport";
-import { registerController } from "./controllers/register.controller";
-import { loginController } from "./controllers/login.controller";
-import { refreshController } from "./controllers/refresh.controller";
-import { logoutController } from "./controllers/logout.controller";
-import { googleCallbackController } from "./controllers/google.controller";
-import { getMeController } from "./controllers/me.controller";
 import { authMiddleware } from "../../middlewares/auth.middleware";
+import { googleCallbackController } from "./controllers/google.controller";
+import { loginController } from "./controllers/login.controller";
+import { logoutController } from "./controllers/logout.controller";
+import { getMeController } from "./controllers/me.controller";
+import { refreshController } from "./controllers/refresh.controller";
+import { registerController } from "./controllers/register.controller";
 
 const router = express.Router();
 

@@ -1,9 +1,9 @@
 import { Resend } from "resend";
 import { userRepository } from "../../database/mongo/user/userModelRepo";
 import { AppError } from "../../Error/appError";
-import { verificationEmailTemplate } from "../../utils/verificationCode.structure";
-import { generateVerifyExpiry } from "../../utils/generateVerifyExpiry";
 import { generateVerifyCode } from "../../utils/generateVerifyCode";
+import { generateVerifyExpiry } from "../../utils/generateVerifyExpiry";
+import { verificationEmailTemplate } from "../../utils/verificationCode.structure";
 
 
 // Initializing Resend with the API key from environment variables

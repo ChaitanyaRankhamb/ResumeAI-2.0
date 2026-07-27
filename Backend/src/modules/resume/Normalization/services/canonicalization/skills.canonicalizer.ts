@@ -1,6 +1,5 @@
-import { Skills } from "../../types/normalizedResume";
-import { SkillMapper } from "../../mappers/skill.mapper";
 import { canonicalizeSkillArray } from "../../helpers/canonicalization.helper";
+import { Skills } from "../../types/normalizedResume";
 
 /**
  * Skills Canonicalizer
@@ -18,7 +17,6 @@ import { canonicalizeSkillArray } from "../../helpers/canonicalization.helper";
  * @returns Fully normalized, deduplicated, and clean skills object
  */
 export function canonicalizeSkills(skills: any): Skills {
-  const skillMapper = new SkillMapper(); // Create an instance of SkillMapper to use for normalization
 
   return {
     // Technical skills (e.g., programming languages, core tech)

@@ -4,7 +4,7 @@ import Fuse from "fuse.js";
 
 /**
  * Canonical skill mapping dictionary
- * Maps different variations → one standard skill
+ * Maps different variations â†’ one standard skill
  */
 export const SKILL_CANONICAL_MAP: Record<string, string> = {
   // JavaScript Ecosystem
@@ -95,8 +95,8 @@ export class SkillMapper {
     /**
      * Initialize Fuse.js for fuzzy matching
      * threshold:
-     * 0 → exact match
-     * 1 → very loose match
+     * 0 â†’ exact match
+     * 1 â†’ very loose match
      * Recommended: 0.3 (balanced)
      */
     this.fuzzy = new Fuse(knownSkills, {
@@ -154,7 +154,7 @@ export class SkillMapper {
    * - Admin review
    */
   private handleUnknownSkill(skill: string) {
-    console.warn("Unknown skill detected:", skill);
+    void skill;
 
     // Example future implementation:
     // saveToDB({ skill, status: "unverified", timestamp: new Date() });

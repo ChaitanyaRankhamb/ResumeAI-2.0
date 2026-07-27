@@ -1,13 +1,11 @@
-import bcrypt from "bcryptjs";
 import { Resend } from "resend";
 import { userRepository } from "../../../database/mongo/user/userModelRepo";
-import { AppError } from "../../../Error/appError";
-import { CreateUserData } from "../../../entities/user/userRepo";
 import { AuthProvider } from "../../../entities/user/AuthProvider";
-import { verificationEmailTemplate } from "../../../utils/verificationCode.structure";
+import { CreateUserData } from "../../../entities/user/userRepo";
+import { AppError } from "../../../Error/appError";
 import { generateVerifyCode } from "../../../utils/generateVerifyCode";
-import { generateAccessToken } from "../../../utils/jwt.utils";
 import { generateVerifyExpiry } from "../../../utils/generateVerifyExpiry";
+import { verificationEmailTemplate } from "../../../utils/verificationCode.structure";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 

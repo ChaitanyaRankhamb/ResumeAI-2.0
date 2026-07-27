@@ -1,8 +1,8 @@
-import { ResumeStructuredData } from "../../types/normalizedResume";
 import {
-  normalizeLanguageProficiency,
   categorizeInterests,
+  normalizeLanguageProficiency,
 } from "../../helpers/enrich.helpers";
+import { ResumeStructuredData } from "../../types/normalizedResume";
 
 /**
  * Extras Enrichment Service

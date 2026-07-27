@@ -1,6 +1,6 @@
 import { defaultResumeStructuredData, ResumeStructuredData } from "../../modules/resume/Normalization/types/normalizedResume";
+import { ResumeUploadResponse } from "../../types/resumeUploadResponse";
 import { UserId } from "../user/userId";
-import { ResumeUploadResponse } from "../../../../types/resumeUploadResponse.d";
 
 export class File {
   constructor(

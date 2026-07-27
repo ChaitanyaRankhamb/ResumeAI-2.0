@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { resendService } from "./resend.service";
+import { NextFunction, Request, Response } from "express";
 import { resendValidation } from "../../validations/resend.validation";
+import { resendService } from "./resend.service";
 
 /**
  * Controller to handle requests for resending verification codes.

@@ -1,8 +1,7 @@
-import { Multer } from 'multer';
-import { Request, Response, NextFunction } from "express";
-import { verifyAccessToken } from "../utils/jwt.utils";
+import { NextFunction, Request, Response } from "express";
 import redisClient from "../config/redis.connection";
 import { userRepository } from "../database/mongo/user/userModelRepo";
+import { verifyAccessToken } from "../utils/jwt.utils";
 
 export interface AuthRequest extends Request {
   userId?: string;

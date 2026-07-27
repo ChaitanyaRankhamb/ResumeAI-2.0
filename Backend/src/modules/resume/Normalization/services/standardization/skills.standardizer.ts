@@ -6,7 +6,7 @@ const skillMapper = new SkillMapper();
 
 /**
  * Standardizes skills using SkillMapper
- * Converts canonical skills → standardized skills
+ * Converts canonical skills â†’ standardized skills
  */
 export function standardizeSkills(
   skills: CanonicalResume["skills"],

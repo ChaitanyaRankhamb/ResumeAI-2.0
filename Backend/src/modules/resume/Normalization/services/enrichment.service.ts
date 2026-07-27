@@ -1,16 +1,16 @@
 import {
-  ResumeStructuredData,
   EnrichedResumeData,
+  ResumeStructuredData,
 } from "../types/normalizedResume";
 
 // Import sub-enrichers
 import {
-  enrichSkills,
-  enrichExperience,
-  enrichProjects,
-  enrichEducation,
   enrichCertifications,
+  enrichEducation,
+  enrichExperience,
   enrichExtras,
+  enrichProjects,
+  enrichSkills,
 } from "./enrichment";
 
 /**

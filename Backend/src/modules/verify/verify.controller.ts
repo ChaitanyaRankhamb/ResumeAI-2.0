@@ -1,6 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { verifyService } from "./verify.service";
+import { NextFunction, Request, Response } from "express";
 import { verifyCodeValidation } from "../../validations/verifyCode.validation";
+import { verifyService } from "./verify.service";
 
 /**
  * Controller to handle email verification requests.

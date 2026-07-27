@@ -1,7 +1,7 @@
-import mongoose, { Schema, Document, Types } from "mongoose";
+import mongoose, { Document, Schema, Types } from "mongoose";
 import z from "zod";
 import { ResumeStructuredData } from "../../../modules/resume/Normalization";
-import { ResumeUploadResponse } from "../../../../../types/resumeUploadResponse.d";
+import { ResumeUploadResponse } from "../../../types/resumeUploadResponse";
 
 
 // zod validation
@@ -101,9 +101,6 @@ const fileSchema = new Schema<FileDocument>(
 
 // Compound index: prevent duplicate files (same user + same hash)
 fileSchema.index({ userId: 1, hash: 1 }, { unique: true });
-
-// Single index on hash for quick lookups
-fileSchema.index({ hash: 1 });
 
 export const FileModel = mongoose.model<FileDocument>(
   "uploadedfile",

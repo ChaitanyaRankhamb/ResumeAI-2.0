@@ -1,12 +1,12 @@
 import mongoose from "mongoose";
 import { File } from "../../../entities/files/file";
 import type {
-  FileRepository as IFileRepository,
   CreateFileData,
+  FileRepository as IFileRepository,
 } from "../../../entities/files/fileRepo";
 import { UserId } from "../../../entities/user/userId";
-import { FileDocument, FileModel } from "./fileModel";
 import { defaultResumeStructuredData } from "../../../modules/resume/Normalization/types/normalizedResume";
+import { FileDocument, FileModel } from "./fileModel";
 
 /**
  * Converts a Mongoose FileDocument to your domain File entity

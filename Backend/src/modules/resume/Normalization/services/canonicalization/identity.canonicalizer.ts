@@ -1,10 +1,10 @@
-import { Identity } from "../../types/normalizedResume";
 import {
   normalizeEmail,
-  normalizePhone,
   normalizeLocation,
+  normalizePhone,
   normalizeUrl,
 } from "../../helpers/canonicalization.helper";
+import { Identity } from "../../types/normalizedResume";
 
 /**
  * Identity Canonicalizer
@@ -32,10 +32,10 @@ export function canonicalizeIdentity(identity: any): Identity {
     location: identity?.location ? normalizeLocation(identity.location) : null,
 
     linkedin: identity?.linkedin
-      ? normalizeUrl(identity.linkedin, "linkedin")
+      ? normalizeUrl(identity.linkedin)
       : null,
 
-    github: identity?.github ? normalizeUrl(identity.github, "github") : null,
+    github: identity?.github ? normalizeUrl(identity.github) : null,
 
     portfolio: identity?.portfolio ? normalizeUrl(identity.portfolio) : null,
   };

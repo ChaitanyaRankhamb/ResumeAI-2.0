@@ -1,7 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { registerService } from "../services/register.service";
+import { NextFunction, Request, Response } from "express";
 import { registerValidation } from "../../../validations/user.register.validation";
-import { AppError } from "../../../Error/appError";
+import { registerService } from "../services/register.service";
 
 /**
  * Controller to handle user registration requests

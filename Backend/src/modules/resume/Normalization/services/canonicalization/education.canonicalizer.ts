@@ -1,5 +1,5 @@
-import { Education } from "../../types/normalizedResume";
 import { normalizeDegree } from "../../mappers/degree.mapper";
+import { Education } from "../../types/normalizedResume";
 import { sanitizeArray } from "../sanitization.service";
 
 /**
@@ -19,13 +19,13 @@ import { sanitizeArray } from "../sanitization.service";
 export function canonicalizeEducation(education: any): Education[] {
   const sanitized = sanitizeArray(education);
 
-  // Helper → clean string fields
+  // Helper â†’ clean string fields
   const cleanString = (value: any): string | null => {
     if (!value) return null;
     return value.toString().trim().replace(/\s+/g, " ");
   };
 
-  // Helper → validate and normalize education level
+  // Helper â†’ validate and normalize education level
   const normalizeEducationLevel = (level: any): Education["level"] => {
     if (!level) return null;
 
@@ -64,7 +64,7 @@ export function canonicalizeEducation(education: any): Education[] {
     return levelMappings[normalizedLevel.toLowerCase()] || "Other";
   };
 
-  // Helper → normalize year fields (basic validation only)
+  // Helper â†’ normalize year fields (basic validation only)
   const normalizeYear = (year: any): string | null => {
     if (!year) return null;
     return year.toString().trim();

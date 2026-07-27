@@ -6,8 +6,8 @@ import { User } from "../../../entities/user/user";
 import { UserId } from "../../../entities/user/userId";
 
 import type {
-  UserRepository as IUserRepository,
   CreateUserData,
+  UserRepository as IUserRepository,
 } from "../../../entities/user/userRepo";
 import { AppError } from "../../../Error/appError";
 

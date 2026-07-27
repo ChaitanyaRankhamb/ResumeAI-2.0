@@ -4,14 +4,14 @@
 export { processResume } from './pipeline/pipeline';
 export type { PipelineResponse } from './pipeline/pipeline';
 export { normalizeResume } from './pipeline/resumeNormalizer';
-export type { ResumeStructuredData, EnrichedResumeData } from './types/normalizedResume';
+export type { EnrichedResumeData, ResumeStructuredData } from './types/normalizedResume';
 
 // Services
-export * from './services/sanitization.service';
 export * from './services/canonicalization.service';
-export * from './services/standardization.service';
 export * from './services/enrichment.service';
+export * from './services/sanitization.service';
+export * from './services/standardization.service';
 
 // Mappers
-export { SkillMapper, SKILL_CANONICAL_MAP } from './mappers/skill.mapper';
-export { normalizeDegree, DEGREE_CANONICAL_MAP } from './mappers/degree.mapper';
+export { DEGREE_CANONICAL_MAP, normalizeDegree } from './mappers/degree.mapper';
+export { SKILL_CANONICAL_MAP, SkillMapper } from './mappers/skill.mapper';

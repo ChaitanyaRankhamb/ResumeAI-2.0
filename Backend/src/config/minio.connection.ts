@@ -1,14 +1,14 @@
-import { Client } from "minio";
 import dotenv from "dotenv";
+import { Client } from "minio";
 
 dotenv.config();
 
 const minioClient = new Client({
-  // endPoint: process.env.MINIO_ENDPOINT || "resume_ai_minio",
-  endPoint: "localhost",
+  // Uses MINIO_ENDPOINT env var — set to 'resume_ai_minio' in Docker, 'localhost' locally
+  endPoint: process.env.MINIO_ENDPOINT || "localhost",
 
-  // internal Docker port
-  port: Number(process.env.MINIO_PORT || 9002), // backend is running locally so use localhost:9002
+  // Uses MINIO_PORT env var — set to 9000 in Docker, 9002 locally
+  port: Number(process.env.MINIO_PORT || 9002),
 
   useSSL: false,
 
