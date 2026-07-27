@@ -4,7 +4,28 @@ import { fetchapi } from "@/lib/refresh-user";
  * API client for authentication related requests
  * This handles registration, login, and Google OAuth
  */
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+const apiUrl = (path: string) => {
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${normalizedPath}`;
+};
+
+const readJsonResponse = async (response: Response) => {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+
+  if (contentType.includes("application/json")) {
+    return text ? JSON.parse(text) : {};
+  }
+
+  const preview = text.replace(/\s+/g, " ").slice(0, 160);
+  throw new Error(
+    `API returned ${response.status} ${response.statusText || ""} as ${contentType || "unknown content type"}. ` +
+      `Check NEXT_PUBLIC_API_URL and backend route. Response preview: ${preview}`,
+  );
+};
 
 /**
  * Handles user registration
@@ -15,7 +36,7 @@ const API_BASE_URL = "http://localhost:5000";
 export const registerUser = async (username: string, email: string) => {
   try {
     console.log("api url", API_BASE_URL);
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    const response = await fetch(apiUrl("/auth/register"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -24,7 +45,7 @@ export const registerUser = async (username: string, email: string) => {
       credentials: "include",
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || "Registration failed");
@@ -46,7 +67,7 @@ export const registerUser = async (username: string, email: string) => {
  */
 export const loginUser = async (email: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+    const response = await fetch(apiUrl("/auth/login"), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -55,7 +76,7 @@ export const loginUser = async (email: string) => {
       body: JSON.stringify({ email }),
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || "Login failed");
@@ -72,7 +93,7 @@ export const loginUser = async (email: string) => {
  * Redirects user to Google OAuth flow
  */
 export const loginWithGoogle = () => {
-  window.location.href = `${API_BASE_URL}/auth/google`;
+  window.location.href = apiUrl("/auth/google");
 };
 
 /**
@@ -82,11 +103,11 @@ export const loginWithGoogle = () => {
  */
 export const getMe = async () => {
   try {
-    const response = await fetchapi(`${API_BASE_URL}/auth/me`, {
+    const response = await fetchapi(apiUrl("/auth/me"), {
       method: "GET",
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || "Failed to fetch user data");
@@ -104,12 +125,12 @@ export const getMe = async () => {
 // logout API
 export const logoutApi = async () => {
   try {
-    const res = await fetch(`${API_BASE_URL}/auth/logout`, {
+    const res = await fetch(apiUrl("/auth/logout"), {
       method: "POST",
       credentials: "include",
     });
 
-    const data = await res.json();
+    const data = await readJsonResponse(res);
 
     if (!res.ok) {
       throw new Error(data.message || "Logout failed");
@@ -133,14 +154,14 @@ export const uploadResume = async (file: File) => {
     formData.append("resume", file);
 
     const response = await fetchapi(
-      `${API_BASE_URL}/upload-resume/`,
+      apiUrl("/upload-resume"),
       {
         method: "POST",
         body: formData,
       },
     );
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
 
     if (!response.ok) {
       throw new Error(data.message || "Upload failed");
