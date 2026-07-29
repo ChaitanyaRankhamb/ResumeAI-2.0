@@ -12,11 +12,36 @@ import { generateStructuredData } from "./generateStructureData.service";
 import { resumeParseService } from "./parse.service";
 import { Job } from "bullmq";
 
+export interface ResumeProgressPayload {
+  progress: number;
+  message: string;
+}
+
 interface responseData {
   success: boolean;
   message: string;
   data?: any;
 }
+
+export const buildResumeProgressPayload = (
+  progress: number,
+): ResumeProgressPayload => {
+  const messages: Record<number, string> = {
+    10: "validating resume",
+    20: "loading resume",
+    30: "parsing resume",
+    50: "Structuring resume data",
+    60: "Narmalizing resume",
+    70: "Analysing information",
+    90: "Genarating insgiths",
+    100: "Analyzation ready",
+  };
+
+  return {
+    progress,
+    message: messages[progress] ?? "Processing resume",
+  };
+};
 
 const streamToBuffer = async (stream: any): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
@@ -35,7 +60,7 @@ export const processResumeAnalysisJob = async (
   fileId: string,
 ): Promise<responseData> => {
   try {
-    await job.updateProgress(10);
+    await job.updateProgress(buildResumeProgressPayload(10));
 
     // Validate the user before processing the uploaded resume.
     const user = await userRepository.findUserById(userId);
@@ -43,7 +68,7 @@ export const processResumeAnalysisJob = async (
       throw new AppError("User Not Found Error", 400);
     }
 
-    await job.updateProgress(20);
+    await job.updateProgress(buildResumeProgressPayload(20));
 
     // Load the stored file metadata so the worker can read the uploaded file.
     const resumeFile = await fileRepository.findFileById(fileId);
@@ -63,7 +88,7 @@ export const processResumeAnalysisJob = async (
         parsedAnalyzedData.skillInsights.allSkills &&
         Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
       ) {
-        await job.updateProgress(100);
+        await job.updateProgress(buildResumeProgressPayload(100));
 
         return {
           success: true,
@@ -94,7 +119,7 @@ export const processResumeAnalysisJob = async (
       path: resumeFile.getPath(),
     } as Express.Multer.File;
 
-    await job.updateProgress(30);
+    await job.updateProgress(buildResumeProgressPayload(30));
 
     // Parse the resume content and store the extracted text with the file record.
     const parseResult = await resumeParseService(
@@ -125,7 +150,7 @@ export const processResumeAnalysisJob = async (
       await fileRepository.updateFile(updatedFile);
     }
 
-    await job.updateProgress(50);
+    await job.updateProgress(buildResumeProgressPayload(50));
 
     // Stop early if parsing failed.
     if (!parseResult.success || !parsedText) {
@@ -135,7 +160,7 @@ export const processResumeAnalysisJob = async (
       };
     }
 
-    await job.updateProgress(60);
+    await job.updateProgress(buildResumeProgressPayload(60));
 
     // Generate structured data from the parsed text using AI.
     const structuredResultData = await generateStructuredData(
@@ -150,7 +175,7 @@ export const processResumeAnalysisJob = async (
       );
     }
 
-    await job.updateProgress(70);
+    await job.updateProgress(buildResumeProgressPayload(70));
 
     // Validate structured data and normalize it before generating analyzed insights.
     const validatedStructuredData = validateStructuredData(
@@ -173,7 +198,7 @@ export const processResumeAnalysisJob = async (
       };
     }
 
-    await job.updateProgress(90);
+    await job.updateProgress(buildResumeProgressPayload(90));
 
     // Generate the final analyzed resume data and cache it for reuse.
     const finalResumeAnalyzedData = await generateResumeAnalyzedData(
