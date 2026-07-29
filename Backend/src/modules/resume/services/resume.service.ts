@@ -4,6 +4,7 @@ import { userRepository } from "../../../database/mongo/user/userModelRepo";
 import { File } from "../../../entities/files/file";
 import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
+import { resumeQueue } from "../../../queues/resume-queue";
 import { validateStructuredData } from "../../../validations/resumeStructureData.validation";
 import { processResume } from "../Normalization";
 import { resumeFileService } from "./file.service";
@@ -37,167 +38,35 @@ export const uploadResumeService = async (
       };
     }
 
-    // if (fileResult.success && fileResult.data?.isDuplicate) {
-    //   // return resume analyzed data from redis
-    //   const cachedAnalyzedData = await redisClient.get(
-    //     `resume:${fileResult.data?.fileHash}`,
-    //   );
-    //   if (cachedAnalyzedData) {
-    //     const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
+    // get the fileId from the fileResult data to create the job payload for the resume analysis queue
+    const fileId = await fileResult.data?.fileId;
 
-    //     // Validate cached data has required fields
-    //     if (
-    //       !parsedAnalyzedData.skillInsights ||
-    //       !parsedAnalyzedData.skillInsights.allSkills ||
-    //       !Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
-    //     ) {
-    //       console.error(
-    //         "Invalid cached analyzed data: missing or invalid skillInsights",
-    //       );
-    //       // If cached data is invalid, continue to process (don't return invalid data)
-    //     } else {
-    //       // Ensure the file document has the analyzed data
-    //       const file = await fileRepository.findFileById(
-    //         fileResult.data?.fileId,
-    //       );
-    //       if (file) {
-    //         const updatedFile = new File(
-    //           file.id,
-    //           file.userId,
-    //           file.getName(),
-    //           file.getOriginalName(),
-    //           file.getPath(),
-    //           file.getSize(),
-    //           file.getHash(),
-    //           file.getFormat(),
-    //           file.uploadedAt,
-    //           file.getParseText(),
-    //           file.getStructuredData(),
-    //           parsedAnalyzedData, // Save to file document
-    //         );
-    //         await fileRepository.updateFile(updatedFile);
-    //       }
-
-    //       return {
-    //         success: true,
-    //         message: "Resume analyzed data retrieved from cache",
-    //         data: {
-    //           fileId: fileResult.data?.fileId,
-    //           hash: fileResult.data?.hash,
-    //           analyzedData: parsedAnalyzedData,
-    //         },
-    //       };
-    //     }
-    //   }
-    // }
-
-    // parse the resume file and extract info
-    const parseResult = await resumeParseService(userId, resume);
-
-    const parsedText = parseResult.data?.rawText;
-    // Production point: never log parsed resume text because it contains PII.
-    // Log only operational metadata needed for debugging.
-    console.info("Resume parsed", {
-      userId: userId.toString(),
-      fileId: fileResult.data?.fileId,
-      textLength: parsedText?.length ?? 0,
-    });
-
-    // Update the file with parsed text if parsing was successful
-    if (fileResult.success) {
-      const fileId = fileResult.data?.fileId;
-      if (fileId) {
-        const resumeFile = await fileRepository.findFileById(fileId);
-        if (resumeFile && parseResult.success && parsedText) {
-          // Create a new File instance with updated parseText
-          const updatedFile = new File(
-            resumeFile.id,
-            resumeFile.userId,
-            resumeFile.getName(),
-            resumeFile.getOriginalName(),
-            resumeFile.getPath(),
-            resumeFile.getSize(),
-            resumeFile.getHash(),
-            resumeFile.getFormat(),
-            resumeFile.uploadedAt,
-            [parsedText], // Store parsed text as array with the full text
-          );
-          await fileRepository.updateFile(updatedFile);
-        }
-      }
-    }
-
-    // Stop early if parsing failed
-    if (!parseResult.success || !parsedText) {
-      return {
-        success: false,
-        message: "Resume parsed failed",
-      };
-    }
-
-    const fileId = fileResult.data?.fileId;
-
-    // Generate structured data from the parsed text using AI
-    const structuredResultData = await generateStructuredData(
-      fileId,
-      parsedText,
+    await resumeQueue.add(
+      "resume-parse",
+      {
+        fileId,
+        userId: userId.toString(),
+      },
+      {
+        jobId: fileId,
+        attempts: 3, // retry the job 3 times if it fails and then move it to the failed queue permenently
+        backoff: {
+          type: "exponential",
+          delay: 5000,
+        },
+        removeOnComplete: 100, // only keep latest 100 completed jobs in the queue to save redis memory
+        removeOnFail: 1000, // only keep latest 1000 failed jobs in the queue to save redis memory
+      },
     );
 
-    if (!structuredResultData.success) {
-      // Log warning but don't fail the upload
-      console.warn("Failed to generate structured data:", structuredResultData.message);
-    }
-
-    // validate structured data and generate analyzed data if valid
-    const validatedStructuredData = validateStructuredData(
-      structuredResultData.data,
-    );
-
-    // normalize the validated structured data. call the pipeline function here
-    const normalizationResult = await processResume(validatedStructuredData);
-
-
-    if (!normalizationResult.success) {
-      return {
-        success: false,
-        message: `Resume normalization failed: ${normalizationResult.message}`,
-      };
-    }
-
-    const normalizedStructuredData = normalizationResult.data;
-
-    if (!normalizedStructuredData) {
-      return {
-        success: false,
-        message: "Normalization failed: No data returned",
-      };
-    }
-
-    // generate analyzed data from the normalized structured data using AI
-    const finalResumeAnalyzedData = await generateResumeAnalyzedData(
-      fileId,
-      normalizedStructuredData,
-    );
-
-    if (!finalResumeAnalyzedData.success) {
-      return {
-        success: false,
-        message: `Failed to generate analyzed data: ${finalResumeAnalyzedData.message}`,
-      };
-    }
-
-    // save final analyzed data in redis cache
-    await redisClient.set(
-      `resume:${finalResumeAnalyzedData.data?.hash}`,
-      JSON.stringify(finalResumeAnalyzedData.data?.analyzedData),
-    );
+    // The heavy resume-processing flow now runs inside the worker service.
 
     return {
       success: true,
-      message: "Resume uploaded and processed successfully",
+      message: "Resume uploaded successfully. Resume analysis is in progress.",
       data: {
         fileId,
-        analyzedData: finalResumeAnalyzedData.data?.analyzedData,
+        status: "processing",
       },
     };
   } catch (error: any) {
