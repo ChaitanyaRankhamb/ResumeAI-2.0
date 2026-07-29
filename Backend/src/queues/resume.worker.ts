@@ -9,12 +9,17 @@ export const resumeWorker = new Worker(
     const { fileId, userId } = job.data;
 
     // The worker executes the resume-processing workflow from the worker service.
-    await processResumeAnalysisJob(userId, fileId);
+    await processResumeAnalysisJob(job, userId, fileId);
   },
   {
     connection: queueConnection, // it will tell to workers where the jobs are stored in redis server
   },
 );
+
+// Log the worker lifecycle events so job progress is easier to trace.
+resumeWorker.on("progress", (job: Job<ResumeAnalysisJobData>, progress: number | unknown) => {
+  console.log(`[resume-worker] Job ${job.id} progress: ${progress}% for user ${job.data.userId}`);
+});
 
 // Log the worker lifecycle events so job progress is easier to trace.
 resumeWorker.on("completed", (job: Job<ResumeAnalysisJobData>) => {
