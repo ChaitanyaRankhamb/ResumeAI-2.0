@@ -17,8 +17,8 @@ export const resumeWorker = new Worker(
 );
 
 // Log the worker lifecycle events so job progress is easier to trace.
-resumeWorker.on("progress", (job: Job<ResumeAnalysisJobData>, progress: number | unknown) => {
-  console.log(`[resume-worker] Job ${job.id} progress: ${progress}% for user ${job.data.userId}`);
+resumeWorker.on("progress", (job: Job<ResumeAnalysisJobData>, progress: Object) => {
+  console.log(`[resume-worker] Job ${job.id} progress: ${JSON.stringify(progress)} for user ${job.data.userId}`);
 });
 
 // Log the worker lifecycle events so job progress is easier to trace.
