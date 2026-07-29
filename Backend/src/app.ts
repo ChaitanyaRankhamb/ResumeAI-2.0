@@ -12,6 +12,7 @@ import resumeRouter from "./modules/resume/resume.routes";
 import userRouter from "./modules/user/user.routes";
 import verifyRouter from "./modules/verify/verify.route";
 import reportPdfRoutes from "./routes/report-pdf";
+import resumeProgressRouter from "./modules/resume/resume.progress.route";
 
 // Create a new express application instance
 const app = express();
@@ -55,7 +56,7 @@ app.use("/verify", verifyRouter);
 app.use("/check-username", checkUsernameRouter);
 app.use("/upload-resume", resumeRouter);
 app.use("/resume", resumeRouter); // Add this for GET endpoints
-app.use("/resume/progress", resumeRouter);
+app.use("/resume/progress", resumeProgressRouter);
 app.use("/report", reportPdfRoutes);
 
 // Set the network port
