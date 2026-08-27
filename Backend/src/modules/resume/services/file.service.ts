@@ -26,7 +26,7 @@ export const resumeFileService = async (
     const originalName = resume.originalname;
 
     console.log(
-      `[FileService] Starting upload for user: ${userId}, file: ${originalName}`,
+      `[STORAGE:FILE] Starting file ingestion for user: ${userId}, file: "${originalName}"`,
     );
 
     // STEP 2: Generate SHA-256 hash for deduplication
@@ -36,10 +36,11 @@ export const resumeFileService = async (
 
     const fileHash = hash.digest("hex");
 
-    console.log(`[FileService] File hash: ${fileHash}`);
+    console.log(`[STORAGE:HASH] Computed SHA-256 hash: ${fileHash}`);
 
     // Ensure the generated hash is structurally valid (64-character SHA-256 hex string)
     if (!fileHash || fileHash.length !== 64) {
+      console.error(`[STORAGE:HASH] Invalid SHA-256 hash generated: ${fileHash}`);
       return {
         success: false,
         message: "Invalid or empty file hash generated. Upload aborted.",
@@ -48,7 +49,7 @@ export const resumeFileService = async (
 
     // STEP 3: Check duplicate file
     console.log(
-      `[FileService] Checking duplicate for userId: ${userId}, hash: ${fileHash}`,
+      `[DB:MONGODB] Checking duplicate file record for userId: ${userId}, hash: ${fileHash}`,
     );
 
     const existingFile = await fileRepository.findFileByUserAndHash(
@@ -58,8 +59,32 @@ export const resumeFileService = async (
 
     if (existingFile) {
       console.log(
-        `[FileService] Duplicate found. Existing file ID: ${existingFile.id}`,
+        `[DB:MONGODB] Duplicate file detected. Existing file ID: ${existingFile.id}`,
       );
+
+      const bucketName = process.env.MINIO_BUCKET || "resumes";
+      const targetPath = existingFile.getPath();
+
+      // Self-healing: verify the file actually exists in MinIO storage.
+      // If MinIO was restarted or cleared, re-upload the buffer so the worker can process it.
+      try {
+        await minioClient.statObject(bucketName, targetPath);
+        console.log(`[STORAGE:MINIO] Verified file exists in MinIO: "${targetPath}"`);
+      } catch (statError: any) {
+        console.warn(
+          `[STORAGE:MINIO] File missing in MinIO for duplicate record ("${targetPath}"). Restoring buffer to MinIO...`,
+        );
+        await minioClient.putObject(
+          bucketName,
+          targetPath,
+          resume.buffer,
+          resume.size,
+          {
+            "Content-Type": resume.mimetype,
+          },
+        );
+        console.log(`[STORAGE:MINIO] Successfully restored file buffer to MinIO: "${targetPath}"`);
+      }
 
       return {
         success: true,
@@ -74,7 +99,7 @@ export const resumeFileService = async (
       };
     }
 
-    console.log(`[FileService] No duplicate found. Proceeding upload.`);
+    console.log(`[DB:MONGODB] No duplicate found. Proceeding with object storage upload.`);
 
     // STEP 4: Generate unique object name
     const timestamp = Date.now();
@@ -89,12 +114,13 @@ export const resumeFileService = async (
     const objectName = `${userId}/${fileName}`;
 
     console.log(
-      `[FileService] Uploading file to MinIO: ${objectName}`,
+      `[STORAGE:MINIO] Uploading buffer to MinIO bucket: "${process.env.MINIO_BUCKET || "resumes"}", path: "${objectName}"`,
     );
 
     // STEP 5: Upload file to MinIO
+    const bucketName = process.env.MINIO_BUCKET || "resumes";
     await minioClient.putObject(
-      process.env.MINIO_BUCKET!,
+      bucketName,
       objectName,
       resume.buffer,
       resume.size,
@@ -103,7 +129,7 @@ export const resumeFileService = async (
       },
     );
 
-    console.log(`[FileService] File uploaded to MinIO successfully`);
+    console.log(`[STORAGE:MINIO] MinIO upload successful for object: "${objectName}"`);
 
     // STEP 6: Save metadata in MongoDB
     const fileEntity: CreateFileData = {
@@ -120,11 +146,12 @@ export const resumeFileService = async (
       uploadedAt: new Date(),
     };
 
-    console.log(`[FileService] Saving metadata to database`);
+    console.log(`[DB:MONGODB] Creating new File record in MongoDB...`);
 
     const file = await fileRepository.createFile(fileEntity);
 
     if (!file) {
+      console.error(`[DB:MONGODB] Failed to create File document in MongoDB`);
       return {
         success: false,
         message: "Failed to save file metadata to database",
@@ -132,7 +159,7 @@ export const resumeFileService = async (
     }
 
     console.log(
-      `[FileService] Upload completed successfully. File ID: ${file.id}`,
+      `[DB:MONGODB] File metadata stored successfully. File ID: ${file.id}`,
     );
 
     // STEP 7: Return response
@@ -148,7 +175,7 @@ export const resumeFileService = async (
       },
     };
   } catch (err: any) {
-    console.error(`[FileService] Error: ${err.message}`);
+    console.error(`[STORAGE:FILE] Error in resumeFileService: ${err.message}`);
 
     return {
       success: false,

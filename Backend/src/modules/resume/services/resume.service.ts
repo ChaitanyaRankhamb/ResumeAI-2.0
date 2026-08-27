@@ -23,8 +23,10 @@ export const uploadResumeService = async (
 ): Promise<responseData> => {
   try {
     // user validation
+    console.log(`[DB:MONGODB] Validating user in database: ${userId}`);
     const user = await userRepository.findUserById(userId.toString());
     if (!user) {
+      console.error(`[DB:MONGODB] User not found: ${userId}`);
       throw new AppError("User Not Found Error", 400);
     }
 
@@ -32,6 +34,7 @@ export const uploadResumeService = async (
     const fileResult = await resumeFileService(userId, resume);
 
     if (!fileResult.success) {
+      console.error(`[STORAGE:FILE] File service returned failure: ${fileResult.message}`);
       return {
         success: false,
         message: fileResult.message,
@@ -40,6 +43,10 @@ export const uploadResumeService = async (
 
     // get the fileId from the fileResult data to create the job payload for the resume analysis queue
     const fileId = await fileResult.data?.fileId;
+
+    console.log(
+      `[QUEUE:BULLMQ] Enqueuing 'resume-parse' job in queue 'resume-analysis' with jobId: ${fileId}, userId: ${userId}`,
+    );
 
     await resumeQueue.add(
       "resume-parse",
@@ -59,6 +66,10 @@ export const uploadResumeService = async (
       },
     );
 
+    console.log(
+      `[QUEUE:BULLMQ] Job successfully added to queue. fileId: ${fileId}, status: processing`,
+    );
+
     // The heavy resume-processing flow now runs inside the worker service.
 
     return {
@@ -70,7 +81,7 @@ export const uploadResumeService = async (
       },
     };
   } catch (error: any) {
-    console.error("Error in uploadResumeService:", error?.message || error);
+    console.error("[SERVICE:RESUME] Error in uploadResumeService:", error?.message || error);
 
     return {
       success: false,

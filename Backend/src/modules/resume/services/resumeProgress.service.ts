@@ -14,6 +14,8 @@ export const resumeProgressService = async (
   jobId: string,
   res: Response,
 ): Promise<void> => {
+  console.log(`[SSE:PROGRESS] Client opened SSE connection for jobId: ${jobId}`);
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -31,11 +33,12 @@ export const resumeProgressService = async (
   // Wait for the queue events to be ready before proceeding
   await queueEvents.waitUntilReady();
 
-  // Send current progress immediately
+  // get the Job object from the queue using the provided jobId
   const job = await queue.getJob(jobId);
 
   // If the job exists, send its current progress to the client
   if (job) {
+    console.log(`[SSE:PROGRESS] Sending initial job progress to client: ${JSON.stringify(job.progress)} for jobId: ${jobId}`);
     sendSseEvent(res, job.progress as ResumeProgressPayload);
   }
 
@@ -43,6 +46,7 @@ export const resumeProgressService = async (
   queueEvents.on("progress", ({ jobId: id, data }) => {
     if (id !== jobId) return;
 
+    console.log(`[SSE:PROGRESS] Emitting progress event to SSE stream: ${JSON.stringify(data)} for jobId: ${jobId}`);
     sendSseEvent(res, data as ResumeProgressPayload);
   });
 
@@ -50,6 +54,7 @@ export const resumeProgressService = async (
   queueEvents.on("completed", ({ jobId: id }) => {
     if (id !== jobId) return;
 
+    console.log(`[SSE:PROGRESS] Job ${jobId} completed. Closing SSE stream.`);
     res.end();
   });
 
@@ -57,10 +62,12 @@ export const resumeProgressService = async (
   queueEvents.on("failed", ({ jobId: id }) => {
     if (id !== jobId) return;
 
+    console.error(`[SSE:PROGRESS] Job ${jobId} failed. Closing SSE stream.`);
     res.end();
   });
 
   res.on("close", async () => {
+    console.log(`[SSE:PROGRESS] Client closed connection for jobId: ${jobId}`);
     await queueEvents.close();
     await queue.close();
   });

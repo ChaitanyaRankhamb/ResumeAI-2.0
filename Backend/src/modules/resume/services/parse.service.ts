@@ -18,10 +18,12 @@ export const resumeParseService = async (
 ): Promise<ResumeParseResponse> => {
   try {
     const mimeType = resume.mimetype;
+    console.log(`[PARSER] Starting text extraction for file: "${resume.originalname}", format: ${mimeType}`);
     let parsedText: string = "";
 
     // PDF Parsing
     if (mimeType === "application/pdf") {
+      console.log(`[PARSER] Using pdf-parse engine...`);
       const sourceBuffer =
         resume.buffer || (resume.path ? fs.readFileSync(resume.path) : null);
       if (!sourceBuffer) {
@@ -39,6 +41,7 @@ export const resumeParseService = async (
       mimeType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
+      console.log(`[PARSER] Using mammoth DOCX extraction engine...`);
       if (resume.buffer) {
         const result = await mammoth.extractRawText({
           buffer: resume.buffer as Buffer,
@@ -58,6 +61,7 @@ export const resumeParseService = async (
 
     // DOC Parsing
     else if (mimeType === "application/msword") {
+      console.log(`[PARSER] Using textract DOC extraction engine...`);
       if (resume.path) {
         parsedText = await new Promise((resolve, reject) => {
           textract.fromFileWithPath(resume.path, (error, text) => {
@@ -83,6 +87,7 @@ export const resumeParseService = async (
 
     // Unsupported Format
     else {
+      console.warn(`[PARSER] Unsupported file format encountered: ${mimeType}`);
       return {
         success: false,
         message: "Unsupported file format",
@@ -101,6 +106,10 @@ export const resumeParseService = async (
       .replace(/\n{3,}/g, "\n\n")  // max 2 consecutive blank lines
       .trim();
 
+    const wordCount = parsedText.split(/\s+/).filter(Boolean).length;
+    const lineCount = parsedText.split("\n").length;
+    console.log(`[PARSER] Extraction complete. Characters: ${parsedText.length}, Words: ${wordCount}, Lines: ${lineCount}`);
+
     return {
       success: true,
       message: "Resume parsed successfully",
@@ -109,6 +118,7 @@ export const resumeParseService = async (
       },
     };
   } catch (error: any) {
+    console.error(`[PARSER] Extraction error: ${error.message}`);
     return {
       success: false,
       message: error.message || "Failed to parse resume",
