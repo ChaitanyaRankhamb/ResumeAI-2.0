@@ -126,5 +126,19 @@ export const resumeStructuredDataSchema = z
   .strip();
 
 export const validateStructuredData = (data: unknown): ResumeStructuredData => {
-  return resumeStructuredDataSchema.parse(data ?? {}) as ResumeStructuredData;
+  const validated = resumeStructuredDataSchema.parse(data ?? {}) as ResumeStructuredData;
+  
+  const technicalCount = validated.skills?.technical?.length ?? 0;
+  const softCount = validated.skills?.soft?.length ?? 0;
+  const toolsCount = validated.skills?.tools?.length ?? 0;
+  const expCount = validated.experience?.length ?? 0;
+  const projCount = validated.projects?.length ?? 0;
+  const eduCount = validated.education?.length ?? 0;
+  const certCount = validated.certifications?.length ?? 0;
+
+  console.log(
+    `[VALIDATION:ZOD] Schema validation passed: ${technicalCount} tech skills, ${toolsCount} tools, ${softCount} soft skills, ${expCount} experiences, ${projCount} projects, ${eduCount} degrees, ${certCount} certs`,
+  );
+
+  return validated;
 };
