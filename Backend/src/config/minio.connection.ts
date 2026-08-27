@@ -20,8 +20,14 @@ const minioClient = new Client({
 export const connectMinio = async (): Promise<void> => {
   try {
     await minioClient.listBuckets();
+    console.log("[MinIO] Connected successfully");
 
-    console.log("[MinIO] Connected successfully"); 
+    const bucketName = process.env.MINIO_BUCKET || "resumes";
+    const bucketExists = await minioClient.bucketExists(bucketName);
+    if (!bucketExists) {
+      await minioClient.makeBucket(bucketName);
+      console.log(`[MinIO] Bucket '${bucketName}' created successfully`);
+    }
   } catch (error: any) {
     console.error("[MinIO] Connection failed:", error.message);
 
