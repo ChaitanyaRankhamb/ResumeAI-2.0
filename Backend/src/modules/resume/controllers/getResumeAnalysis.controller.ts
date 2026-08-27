@@ -23,16 +23,23 @@ export const getResumeAnalysisController = async (
     const { fileId } = req.params as unknown as Params;
     if (!fileId) throw new AppError("fileId is required", 400);
 
+    console.log(`[API:GET_ANALYSIS] GET /resume/analysis/${fileId} requested by userId: ${userId}`);
+
     const file = await fileRepository.findFileById(fileId);
-    if (!file) throw new AppError("File not found", 404);
+    if (!file) {
+      console.warn(`[API:GET_ANALYSIS] File not found in MongoDB: ${fileId}`);
+      throw new AppError("File not found", 404);
+    }
 
     if (file.userId.toString() !== userId.toString()) {
+      console.warn(`[API:GET_ANALYSIS] Forbidden: file userId (${file.userId}) does not match requester (${userId})`);
       throw new AppError("Forbidden", 403);
     }
 
     const analyzedData = file.getAnalyzedData();
 
     if (analyzedData) {
+      console.log(`[API:GET_ANALYSIS] Serving analysis data directly from MONGODB for fileId: ${fileId}`);
       res.status(200).json({
         success: true,
         message: "resume analysis data send successfully",
@@ -48,6 +55,7 @@ export const getResumeAnalysisController = async (
 
     if (!analyzedData) {
       // Check Redis cache for analysis data
+      console.log(`[API:GET_ANALYSIS] Analysis not in MongoDB doc. Checking Redis cache for key: "resume:${file.getHash()}"...`);
       cachedAnalyzedData = await redisClient.get(`resume:${file.getHash()}`);
       if (cachedAnalyzedData) {
         const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
@@ -59,12 +67,13 @@ export const getResumeAnalysisController = async (
           !Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
         ) {
           console.error(
-            "Invalid cached analyzed data: missing or invalid skillInsights",
+            "[API:GET_ANALYSIS] Invalid cached analyzed data: missing or invalid skillInsights",
             parsedAnalyzedData,
           );
           cachedAnalyzedData = null; // Treat as not found
         } else {
           // Update the file document with cached data
+          console.log(`[API:GET_ANALYSIS] Found valid analysis in Redis. Backfilling MongoDB document...`);
           const updatedFile = new File(
             file.id,
             file.userId,
@@ -86,6 +95,7 @@ export const getResumeAnalysisController = async (
     }
 
     if (!cachedAnalyzedData) {
+      console.warn(`[API:GET_ANALYSIS] Analysis data not available yet for fileId: ${fileId}`);
       res.status(400).json({
         success: false,
         message:
@@ -94,6 +104,7 @@ export const getResumeAnalysisController = async (
       return;
     }
 
+    console.log(`[API:GET_ANALYSIS] Serving analysis data from REDIS CACHE for fileId: ${fileId}`);
     res.status(200).json({
       success: true,
       message: "resume analysis data retrieved from cache successfully",
