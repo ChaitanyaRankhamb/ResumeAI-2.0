@@ -27,15 +27,30 @@ export const generateResumeAnalyzedData = async (
   normalizedStructuredData: EnrichedResumeData,
 ): Promise<ResumeAnalyzedDataResponse> => {
   try {
-    // ── Step 1: Validate API key ─────────────────────────────────────────────
-    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.OPENROUTER_API_KEY ||
+      process.env.OPENAI_API_KEY;
+
     if (!apiKey) {
       throw new Error(
-        "Missing OPENROUTER_API_KEY / OPENAI_API_KEY in environment variables",
+        "Missing GEMINI_API_KEY / OPENROUTER_API_KEY in environment variables",
       );
     }
 
-    const modelName = process.env.OPENROUTER_MODEL || "gpt-4o-mini";
+    const isGemini = Boolean(process.env.GEMINI_API_KEY);
+    const apiUrl = isGemini
+      ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+      : process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions";
+
+    const modelName = isGemini
+      ? process.env.GEMINI_MODEL || "gemini-3.6-flash"
+      : process.env.OPENROUTER_MODEL || "openrouter/free";
+
+    console.log(`\n------------------------------------------------------`);
+    console.log(`[NORMALIZATION:OUTPUT] Normalized Resume Payload for fileId: ${fileId}:`);
+    console.log(JSON.stringify(normalizedStructuredData, null, 2));
+    console.log(`------------------------------------------------------\n`);
 
     // ── Step 2: Compute scores deterministically ─────────────────────────────
     // Scores are computed in pure TypeScript — never delegated to the AI.
@@ -43,7 +58,9 @@ export const generateResumeAnalyzedData = async (
     // the non-determinism that caused 40 vs 70 score swings.
     const computedScores: ResumeScores = computeResumeScores(normalizedStructuredData);
 
-    console.info("[generateResumeAnalyzedData] Computed scores:", computedScores);
+    console.log(
+      `[ENGINE:SCORING] Deterministic scores computed: overall=${computedScores.overall}, skills=${computedScores.skills}, experience=${computedScores.experience}, projects=${computedScores.projects}`,
+    );
 
     // ── Step 3: Build the AI input payload ──────────────────────────────────
     // We pass both the enriched resume data AND the computed scores.
@@ -64,8 +81,13 @@ export const generateResumeAnalyzedData = async (
       },
     ];
 
-    // ── Step 4: Call OpenRouter API ──────────────────────────────────────────
-    const response = await fetch(OPENROUTER_URL, {
+    console.log(
+      `[AI:INSIGHTS] Calling AI model "${modelName}" via ${isGemini ? "Google Gemini (Free)" : "OpenRouter"} for fileId: ${fileId} to generate final report...`,
+    );
+
+    // ── Step 4: Call AI API ──────────────────────────────────────────
+    const aiCallStart = Date.now();
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -75,17 +97,19 @@ export const generateResumeAnalyzedData = async (
         model: modelName,
         messages,
         temperature: 0,        // deterministic output
-        max_tokens: 4000,
-        top_p: 1,
-        presence_penalty: 0,
-        frequency_penalty: 0,
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
       }),
     });
+
+    const aiLatency = Date.now() - aiCallStart;
+    console.log(`[AI:INSIGHTS] AI model responded in ${aiLatency}ms with HTTP status: ${response.status}`);
 
     // ── Step 5: Handle non-200 responses ─────────────────────────────────────
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
+      console.error(`[AI:INSIGHTS] API error ${response.status}: ${errorBody}`);
+      throw new Error(`AI API error ${response.status}: ${errorBody}`);
     }
 
     // ── Step 6: Parse API response ───────────────────────────────────────────
@@ -94,21 +118,25 @@ export const generateResumeAnalyzedData = async (
     try {
       result = JSON.parse(responseText);
     } catch (parseError) {
+      console.error(`[AI:INSIGHTS] Failed to parse HTTP response text: ${responseText.substring(0, 200)}`);
       throw new Error(
-        `Unexpected response from OpenRouter: ${responseText.substring(0, 200)}`,
+        `Unexpected response from AI provider: ${responseText.substring(0, 200)}`,
       );
     }
 
     const text = result?.choices?.[0]?.message?.content;
     if (!text || text.trim().length === 0) {
+      console.error(`[AI:INSIGHTS] Empty response received from OpenRouter`);
       throw new Error("Empty response received from OpenRouter");
     }
 
     // ── Step 7: Strip markdown fences if present ─────────────────────────────
     let cleanText = text.trim();
     if (cleanText.startsWith("```json")) {
+      console.log(`[AI:INSIGHTS] Stripping \`\`\`json markdown fences from insights output`);
       cleanText = cleanText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
     } else if (cleanText.startsWith("```")) {
+      console.log(`[AI:INSIGHTS] Stripping \`\`\` markdown fences from insights output`);
       cleanText = cleanText.replace(/^```\s*/, "").replace(/\s*```$/, "");
     }
 
@@ -116,8 +144,9 @@ export const generateResumeAnalyzedData = async (
     let parsedData: ResumeUploadResponse;
     try {
       parsedData = JSON.parse(cleanText) as ResumeUploadResponse;
+      console.log(`[AI:INSIGHTS] Final insights JSON parsed successfully`);
     } catch (err) {
-      console.error("Failed to parse AI JSON response", {
+      console.error("[AI:INSIGHTS] Failed to parse AI JSON response", {
         fileId,
         responseLength: cleanText.length,
       });
@@ -131,8 +160,8 @@ export const generateResumeAnalyzedData = async (
       !Array.isArray(parsedData.skillInsights.allSkills)
     ) {
       console.error(
-          "Invalid analyzed data: missing or invalid skillInsights",
-        );
+        "[AI:INSIGHTS] Invalid analyzed data: missing or invalid skillInsights",
+      );
       throw new Error("AI response missing required skillInsights data");
     }
 
@@ -149,10 +178,11 @@ export const generateResumeAnalyzedData = async (
       projects: computedScores.projects,
     };
 
-    console.info("[generateResumeAnalyzedData] Final enforced scores:", parsedData.scores);
+    console.log("[AI:INSIGHTS] Enforced deterministic scores on final output object:", parsedData.scores);
 
     // ── Step 11: Persist to database ─────────────────────────────────────────
     if (fileId) {
+      console.log(`[DB:MONGODB] Updating File ${fileId} in MongoDB with final analyzedData...`);
       const file = await fileRepository.findFileById(fileId);
       if (file) {
         const updatedFile = new File(
@@ -171,6 +201,7 @@ export const generateResumeAnalyzedData = async (
         );
 
         await fileRepository.updateFile(updatedFile);
+        console.log(`[DB:MONGODB] File ${fileId} successfully updated with analyzedData in database`);
 
         return {
           success: true,
@@ -182,6 +213,7 @@ export const generateResumeAnalyzedData = async (
           },
         };
       } else {
+        console.error(`[DB:MONGODB] File not found for analyzed data update: ${fileId}`);
         return {
           success: false,
           message: "File not found for analyzed data update",
@@ -194,7 +226,7 @@ export const generateResumeAnalyzedData = async (
       message: "File ID not provided, cannot associate analyzed data",
     };
   } catch (error: any) {
-    console.error("[generateResumeAnalyzedData] AI Service Error:", {
+    console.error("[AI:INSIGHTS] Service Error:", {
       fileId,
       error: error?.message || error,
     });

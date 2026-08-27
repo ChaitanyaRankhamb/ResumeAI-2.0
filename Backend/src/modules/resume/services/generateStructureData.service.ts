@@ -31,14 +31,29 @@ export const generateStructuredData = async (
       };
     }
 
-    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.OPENROUTER_API_KEY ||
+      process.env.OPENAI_API_KEY;
+
     if (!apiKey) {
       throw new Error(
-        "Missing OPENROUTER_API_KEY / OPENAI_API_KEY in environment variables",
+        "Missing GEMINI_API_KEY / OPENROUTER_API_KEY in environment variables",
       );
     }
 
-    const modelName = process.env.OPENROUTER_MODEL || "gpt-4o-mini";
+    const isGemini = Boolean(process.env.GEMINI_API_KEY);
+    const apiUrl = isGemini
+      ? "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+      : process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions";
+
+    const modelName = isGemini
+      ? process.env.GEMINI_MODEL || "gemini-3.6-flash"
+      : process.env.OPENROUTER_MODEL || "openrouter/free";
+
+    console.log(
+      `[AI:STRUCTURING] Calling AI model "${modelName}" via ${isGemini ? "Google Gemini (Free)" : "OpenRouter"} for fileId: ${fileId} (Input text: ${parsedText.length} chars)`,
+    );
 
     // BUG FIX #2: Previously, SYSTEM_PROMPT was injected TWICE —
     // once as the system role message AND again prepended to the user message.
@@ -55,9 +70,10 @@ export const generateStructuredData = async (
         role: "user",
         content: `Resume Text:\n${parsedText}`,
       },
-    ]
+    ];
 
-    const response = await fetch(OPENROUTER_URL, {
+    const aiCallStart = Date.now();
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -67,16 +83,18 @@ export const generateStructuredData = async (
         model: modelName,
         messages,
         temperature: 0,
-        max_tokens: 4000,
-        top_p: 1,
-        presence_penalty: 0,
-        frequency_penalty: 0,
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
       }),
     });
 
+    const aiLatency = Date.now() - aiCallStart;
+    console.log(`[AI:STRUCTURING] AI API responded in ${aiLatency}ms with HTTP status: ${response.status}`);
+
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
+      console.error(`[AI:STRUCTURING] API error ${response.status}: ${errorBody}`);
+      throw new Error(`AI API error ${response.status}: ${errorBody}`);
     }
 
     const responseText = await response.text();
@@ -84,13 +102,15 @@ export const generateStructuredData = async (
     try {
       result = JSON.parse(responseText);
     } catch (parseError) {
+      console.error(`[AI:STRUCTURING] Failed to parse HTTP response text: ${responseText.substring(0, 200)}`);
       throw new Error(
-        `Unexpected response from OpenRouter: ${responseText.substring(0, 200)}`,
+        `Unexpected response from AI provider: ${responseText.substring(0, 200)}`,
       );
     }
     const text = result?.choices?.[0]?.message?.content;
 
     if (!text || text.trim().length === 0) {
+      console.error(`[AI:STRUCTURING] Empty response received from AI model choices`);
       return {
         success: false,
         message: "Empty response received from OpenRouter",
@@ -111,20 +131,26 @@ export const generateStructuredData = async (
     // generateResumeAnalyzedData.service.ts already does correctly.
     let cleanText = text.trim();
     if (cleanText.startsWith("```json")) {
+      console.log(`[AI:STRUCTURING] Stripping \`\`\`json markdown fence from AI output`);
       cleanText = cleanText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
     } else if (cleanText.startsWith("```")) {
+      console.log(`[AI:STRUCTURING] Stripping \`\`\` markdown fence from AI output`);
       cleanText = cleanText.replace(/^```\s*/, "").replace(/\s*```$/, "");
     }
 
     let structuredData;
     try {
       structuredData = JSON.parse(cleanText); // parse the fence-stripped text
+      console.log(`[AI:STRUCTURING] JSON parsed successfully from AI output`);
     } catch (parseError) {
+      console.error(`[AI:STRUCTURING] Failed to parse AI output as JSON:`, cleanText.substring(0, 200));
       return {
         success: false,
         message: "Failed to parse AI response as JSON",
       };
     }
+
+    console.log(`[DB:MONGODB] Updating file ${fileId} with AI-generated structured data...`);
 
     // Update the file with the AI-generated structured data
     const updatedFile = new File(
@@ -143,11 +169,14 @@ export const generateStructuredData = async (
 
     const updateResult = await fileRepository.updateFile(updatedFile);
     if (!updateResult) {
+      console.error(`[DB:MONGODB] Failed to update file document in MongoDB with structured data`);
       return {
         success: false,
         message: "Failed to update file with structured data",
       };
     }
+
+    console.log(`[DB:MONGODB] File ${fileId} updated with structuredData successfully`);
 
     return {
       success: true,
@@ -155,6 +184,7 @@ export const generateStructuredData = async (
       data: structuredData,
     };
   } catch (error: any) {
+    console.error(`[AI:STRUCTURING] Error: ${error.message}`);
     return {
       success: false,
       message: `Error generating structured data: ${error.message}`,
