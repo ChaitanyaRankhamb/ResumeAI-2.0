@@ -34,7 +34,9 @@ const corsOptions = {
     "http://localhost:3001",
     "http://127.0.0.1:3001",
     "http://localhost",        // nginx on port 80 (Docker)
-    "http://127.0.0.1",       // nginx on port 80 (Docker)
+    "http://127.0.0.1", 
+    "https://localhost",      // nginx on port 443 (Docker)
+    "https://127.0.0.1",
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   credentials: true,
