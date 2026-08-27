@@ -1,4 +1,8 @@
 import { NextFunction, Request, Response } from "express";
+import {
+  ACCESS_TOKEN_COOKIE_OPTIONS,
+  REFRESH_TOKEN_COOKIE_OPTIONS,
+} from "../../../config/cookie.config";
 import { loginValidation } from "../../../validations/user.login.validation";
 import { loginService } from "../services/login.service";
 
@@ -24,22 +28,8 @@ export const loginController = async (
       validation.email,
     );
 
-
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-      maxAge: 30 * 60 * 1000, // 30 minutes
-    });
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie("accessToken", accessToken, ACCESS_TOKEN_COOKIE_OPTIONS);
+    res.cookie("refreshToken", refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
 
     res.status(200).json({
       success: true,

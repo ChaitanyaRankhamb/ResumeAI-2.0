@@ -1,4 +1,5 @@
 import { NextFunction, Response } from "express";
+import { CLEAR_COOKIE_OPTIONS } from "../../../config/cookie.config";
 import { AuthRequest } from "../../../middlewares/auth.middleware";
 import { logoutService } from "../services/logout.service";
 
@@ -16,6 +17,10 @@ export const logoutController = async (
     if (userId) {
       await logoutService(userId);
     }
+
+    // Clear authentication cookies
+    res.clearCookie("accessToken", CLEAR_COOKIE_OPTIONS);
+    res.clearCookie("refreshToken", CLEAR_COOKIE_OPTIONS);
 
     res.status(200).json({
       success: true,

@@ -1,4 +1,8 @@
 import { NextFunction, Request, Response } from "express";
+import {
+  ACCESS_TOKEN_COOKIE_OPTIONS,
+  REFRESH_TOKEN_COOKIE_OPTIONS,
+} from "../../../config/cookie.config";
 import { User } from "../../../entities/user/user";
 import { AppError } from "../../../Error/appError";
 import { handleGoogleLoginService } from "../services/google.service";
@@ -26,30 +30,12 @@ export const googleCallbackController = async (
 
     const { accessToken, refreshToken } = await handleGoogleLoginService(user);
 
-    // Set refresh token in HTTP-only cookie if desired, but for now just redirect
-    // back to the frontend with the access token in the query params.
-    // In production, consider a more secure way to pass tokens. maybe cookies!
-
-
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-      maxAge: 30 * 60 * 1000, // 30 minutes
-    });
-
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
+    res.cookie("accessToken", accessToken, ACCESS_TOKEN_COOKIE_OPTIONS);
+    res.cookie("refreshToken", refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS);
 
     const frontendUrl =
-      process.env.FRONTEND_URL || "http://localhost:3000/dashboard";
-    return res.redirect(`${frontendUrl}`);
+      process.env.FRONTEND_URL || "http://localhost/dashboard";
+    return res.redirect(`${frontendUrl}?oauth=success`);
   } catch (error) {
     next(error);
   }
