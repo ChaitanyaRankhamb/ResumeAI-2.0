@@ -1,4 +1,5 @@
 import { NextFunction, Response } from "express";
+import logger from "../../../config/logger.config";
 import redisClient from "../../../config/redis.connection";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { File } from "../../../entities/files/file";
@@ -14,32 +15,43 @@ export const getResumeAnalysisController = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const log = logger.child({ module: "RESUME", controller: "getResumeAnalysisController" });
+
   try {
     const userId = req.userId;
-    if (!userId) throw new AppError("User is Unauthorized", 401);
+    if (!userId) {
+      log.warn("Unauthorized attempt to get resume analysis");
+      throw new AppError("User is Unauthorized", 401);
+    }
 
     res.setHeader("Cache-Control", "no-store");
 
     const { fileId } = req.params as unknown as Params;
-    if (!fileId) throw new AppError("fileId is required", 400);
+    if (!fileId) {
+      log.warn({ userId }, "Missing fileId parameter in resume analysis request");
+      throw new AppError("fileId is required", 400);
+    }
 
-    console.log(`[API:GET_ANALYSIS] GET /resume/analysis/${fileId} requested by userId: ${userId}`);
+    log.info({ userId, fileId }, "Fetching resume analysis report");
 
     const file = await fileRepository.findFileById(fileId);
     if (!file) {
-      console.warn(`[API:GET_ANALYSIS] File not found in MongoDB: ${fileId}`);
+      log.warn({ userId, fileId }, "Resume file document not found in MongoDB");
       throw new AppError("File not found", 404);
     }
 
     if (file.userId.toString() !== userId.toString()) {
-      console.warn(`[API:GET_ANALYSIS] Forbidden: file userId (${file.userId}) does not match requester (${userId})`);
+      log.warn(
+        { userId, fileOwnerId: file.userId.toString(), fileId },
+        "Forbidden access: requester is not file owner",
+      );
       throw new AppError("Forbidden", 403);
     }
 
     const analyzedData = file.getAnalyzedData();
 
     if (analyzedData) {
-      console.log(`[API:GET_ANALYSIS] Serving analysis data directly from MONGODB for fileId: ${fileId}`);
+      log.info({ fileId, source: "mongodb" }, "Serving resume analysis directly from MongoDB document");
       res.status(200).json({
         success: true,
         message: "resume analysis data send successfully",
@@ -55,8 +67,10 @@ export const getResumeAnalysisController = async (
 
     if (!analyzedData) {
       // Check Redis cache for analysis data
-      console.log(`[API:GET_ANALYSIS] Analysis not in MongoDB doc. Checking Redis cache for key: "resume:${file.getHash()}"...`);
-      cachedAnalyzedData = await redisClient.get(`resume:${file.getHash()}`);
+      const redisKey = `resume:${file.getHash()}`;
+      log.debug({ fileId, redisKey }, "Analysis not in MongoDB document, querying Redis cache");
+      cachedAnalyzedData = await redisClient.get(redisKey);
+
       if (cachedAnalyzedData) {
         const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
 
@@ -66,14 +80,11 @@ export const getResumeAnalysisController = async (
           !parsedAnalyzedData.skillInsights.allSkills ||
           !Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
         ) {
-          console.error(
-            "[API:GET_ANALYSIS] Invalid cached analyzed data: missing or invalid skillInsights",
-            parsedAnalyzedData,
-          );
+          log.warn({ fileId, redisKey }, "Invalid cached analysis data structure in Redis");
           cachedAnalyzedData = null; // Treat as not found
         } else {
           // Update the file document with cached data
-          console.log(`[API:GET_ANALYSIS] Found valid analysis in Redis. Backfilling MongoDB document...`);
+          log.info({ fileId, redisKey }, "Found valid analysis in Redis. Backfilling MongoDB file document");
           const updatedFile = new File(
             file.id,
             file.userId,
@@ -95,7 +106,7 @@ export const getResumeAnalysisController = async (
     }
 
     if (!cachedAnalyzedData) {
-      console.warn(`[API:GET_ANALYSIS] Analysis data not available yet for fileId: ${fileId}`);
+      log.warn({ fileId }, "Resume analysis not yet ready or available");
       res.status(400).json({
         success: false,
         message:
@@ -104,7 +115,7 @@ export const getResumeAnalysisController = async (
       return;
     }
 
-    console.log(`[API:GET_ANALYSIS] Serving analysis data from REDIS CACHE for fileId: ${fileId}`);
+    log.info({ fileId, source: "redis_cache" }, "Serving resume analysis retrieved from Redis cache");
     res.status(200).json({
       success: true,
       message: "resume analysis data retrieved from cache successfully",
@@ -113,7 +124,12 @@ export const getResumeAnalysisController = async (
         analyzedData: cachedAnalyzedData,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    log.error(
+      { err: error, message: error?.message, fileId: req.params?.fileId },
+      "Error fetching resume analysis",
+    );
     next(error);
   }
 };
+

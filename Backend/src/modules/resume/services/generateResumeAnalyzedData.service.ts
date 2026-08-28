@@ -1,4 +1,5 @@
 import fetch from "node-fetch";
+import logger from "../../../config/logger.config";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { File } from "../../../entities/files/file";
 import { AI_RESPONSE_SYSTEM_PROMPT } from "../../../prompts/ai.response.system.prompt";
@@ -26,6 +27,8 @@ export const generateResumeAnalyzedData = async (
   fileId: string,
   parsedText: string,
 ): Promise<ResumeAnalyzedDataResponse> => {
+  const log = logger.child({ module: "RESUME:AI", service: "generateResumeAnalyzedData" });
+
   try {
     const apiKey =
       process.env.GEMINI_API_KEY ||
@@ -33,6 +36,7 @@ export const generateResumeAnalyzedData = async (
       process.env.OPENAI_API_KEY;
 
     if (!apiKey) {
+      log.error("Missing AI API key in environment variables");
       throw new Error(
         "Missing GEMINI_API_KEY / OPENROUTER_API_KEY in environment variables",
       );
@@ -44,11 +48,17 @@ export const generateResumeAnalyzedData = async (
       : process.env.OPENROUTER_URL || "https://openrouter.ai/api/v1/chat/completions";
 
     const modelName = isGemini
-      ? process.env.GEMINI_MODEL || "gemini-3.6-flash"
+      ? process.env.GEMINI_MODEL || "gemini-2.5-flash"
       : process.env.OPENROUTER_MODEL || "openrouter/free";
 
-    console.log(
-      `[AI:INSIGHTS] Calling single-pass AI model "${modelName}" via ${isGemini ? "Google Gemini (Free)" : "OpenRouter"} for fileId: ${fileId} (Input text: ${parsedText.length} chars)...`,
+    log.info(
+      {
+        fileId,
+        provider: isGemini ? "Google Gemini" : "OpenRouter",
+        model: modelName,
+        inputTextLength: parsedText.length,
+      },
+      "Initiating single-pass AI resume analysis",
     );
 
     const messages = [
@@ -80,12 +90,15 @@ export const generateResumeAnalyzedData = async (
     });
 
     const aiLatency = Date.now() - aiCallStart;
-    console.log(`[AI:INSIGHTS] AI model responded in ${aiLatency}ms with HTTP status: ${response.status}`);
+    log.info(
+      { fileId, latencyMs: aiLatency, httpStatus: response.status },
+      "AI provider response received",
+    );
 
     // ── Handle non-200 responses ─────────────────────────────────────────────
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error(`[AI:INSIGHTS] API error ${response.status}: ${errorBody}`);
+      log.error({ fileId, status: response.status, body: errorBody }, "AI provider returned error status");
       throw new Error(`AI API error ${response.status}: ${errorBody}`);
     }
 
@@ -95,7 +108,7 @@ export const generateResumeAnalyzedData = async (
     try {
       result = JSON.parse(responseText);
     } catch (parseError) {
-      console.error(`[AI:INSIGHTS] Failed to parse HTTP response text: ${responseText.substring(0, 200)}`);
+      log.error({ fileId, responseSnippet: responseText.substring(0, 200) }, "Failed to parse AI HTTP response as JSON");
       throw new Error(
         `Unexpected response from AI provider: ${responseText.substring(0, 200)}`,
       );
@@ -103,17 +116,17 @@ export const generateResumeAnalyzedData = async (
 
     const text = result?.choices?.[0]?.message?.content;
     if (!text || text.trim().length === 0) {
-      console.error(`[AI:INSIGHTS] Empty response received from AI model choices`);
+      log.error({ fileId }, "Empty completion choice received from AI model");
       throw new Error("Empty response received from AI model");
     }
 
     // ── Strip markdown fences if present ─────────────────────────────────────
     let cleanText = text.trim();
     if (cleanText.startsWith("```json")) {
-      console.log(`[AI:INSIGHTS] Stripping \`\`\`json markdown fences from insights output`);
+      log.debug({ fileId }, "Stripping markdown json fences from AI output");
       cleanText = cleanText.replace(/^```json\s*/, "").replace(/\s*```$/, "");
     } else if (cleanText.startsWith("```")) {
-      console.log(`[AI:INSIGHTS] Stripping \`\`\` markdown fences from insights output`);
+      log.debug({ fileId }, "Stripping generic markdown fences from AI output");
       cleanText = cleanText.replace(/^```\s*/, "").replace(/\s*```$/, "");
     }
 
@@ -121,12 +134,9 @@ export const generateResumeAnalyzedData = async (
     let parsedData: ResumeUploadResponse;
     try {
       parsedData = JSON.parse(cleanText) as ResumeUploadResponse;
-      console.log(`[AI:INSIGHTS] Single-pass analysis JSON parsed successfully`);
+      log.debug({ fileId }, "AI analysis JSON parsed successfully");
     } catch (err) {
-      console.error("[AI:INSIGHTS] Failed to parse AI JSON response", {
-        fileId,
-        responseLength: cleanText.length,
-      });
+      log.error({ fileId, responseLength: cleanText.length }, "Failed to parse structured JSON from AI text response");
       throw new Error("Invalid JSON format from AI model text response");
     }
 
@@ -136,9 +146,7 @@ export const generateResumeAnalyzedData = async (
       !parsedData.skillInsights.allSkills ||
       !Array.isArray(parsedData.skillInsights.allSkills)
     ) {
-      console.error(
-        "[AI:INSIGHTS] Invalid analyzed data: missing or invalid skillInsights",
-      );
+      log.error({ fileId }, "AI response is missing required skillInsights data");
       throw new Error("AI response missing required skillInsights data");
     }
 
@@ -196,11 +204,11 @@ export const generateResumeAnalyzedData = async (
     parsedData.interviewPrep.intermediate = parsedData.interviewPrep.intermediate || [];
     parsedData.interviewPrep.advanced = parsedData.interviewPrep.advanced || [];
 
-    console.log("[AI:INSIGHTS] Final synchronized scores:", parsedData.scores);
+    log.info({ fileId, scores: parsedData.scores }, "Synchronized AI evaluation scores calculated");
 
     // ── Persist to database ──────────────────────────────────────────────────
     if (fileId) {
-      console.log(`[DB:MONGODB] Updating File ${fileId} in MongoDB with final analyzedData...`);
+      log.debug({ fileId }, "Persisting analyzed data to MongoDB file record");
       const file = await fileRepository.findFileById(fileId);
       if (file) {
         const updatedFile = new File(
@@ -219,7 +227,7 @@ export const generateResumeAnalyzedData = async (
         );
 
         await fileRepository.updateFile(updatedFile);
-        console.log(`[DB:MONGODB] File ${fileId} successfully updated with analyzedData in database`);
+        log.info({ fileId }, "MongoDB file record updated with final analysis");
 
         return {
           success: true,
@@ -231,7 +239,7 @@ export const generateResumeAnalyzedData = async (
           },
         };
       } else {
-        console.error(`[DB:MONGODB] File not found for analyzed data update: ${fileId}`);
+        log.error({ fileId }, "File document not found for analyzed data update");
         return {
           success: false,
           message: "File not found for analyzed data update",
@@ -244,10 +252,10 @@ export const generateResumeAnalyzedData = async (
       message: "File ID not provided, cannot associate analyzed data",
     };
   } catch (error: any) {
-    console.error("[AI:INSIGHTS] Service Error:", {
-      fileId,
-      error: error?.message || error,
-    });
+    log.error(
+      { err: error, message: error?.message, fileId },
+      "Error during AI resume analysis generation",
+    );
 
     return {
       success: false,
@@ -255,3 +263,4 @@ export const generateResumeAnalyzedData = async (
     };
   }
 };
+

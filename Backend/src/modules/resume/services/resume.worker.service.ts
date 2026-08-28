@@ -1,5 +1,7 @@
-import redisClient from "../../../config/redis.connection";
+import { Job } from "bullmq";
+import logger from "../../../config/logger.config";
 import minioClient from "../../../config/minio.connection";
+import redisClient from "../../../config/redis.connection";
 import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { userRepository } from "../../../database/mongo/user/userModelRepo";
 import { File } from "../../../entities/files/file";
@@ -7,7 +9,6 @@ import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
 import { generateResumeAnalyzedData } from "./generateResumeAnalyzedData.service";
 import { resumeParseService } from "./parse.service";
-import { Job } from "bullmq";
 
 export interface ResumeProgressPayload {
   progress: number;
@@ -53,48 +54,43 @@ export const processResumeAnalysisJob = async (
   userId: string,
   fileId: string,
 ): Promise<responseData> => {
+  const log = logger.child({ module: "RESUME:WORKER", jobId: job.id, fileId, userId });
   const jobStartTime = Date.now();
-  console.log(`\n======================================================`);
-  console.log(`[WORKER:PIPELINE] STARTING single-pass resume analysis job`);
-  console.log(
-    `[WORKER:PIPELINE] Job ID: ${job.id} | File ID: ${fileId} | User ID: ${userId}`,
-  );
-  console.log(`======================================================`);
+
+  log.info("Starting single-pass resume analysis job");
 
   try {
     await job.updateProgress(buildResumeProgressPayload(10));
 
-    // Validate the user before processing the uploaded resume.
-    console.log(`[DB:MONGODB] Step 1 (10%): Validating user ${userId}...`);
+    // Step 1: Validate the user before processing the uploaded resume.
+    log.debug("Step 1 (10%): Validating user in database");
     const user = await userRepository.findUserById(userId);
     if (!user) {
-      console.error(`[DB:MONGODB] User not found for ID: ${userId}`);
+      log.error("User not found for processing resume");
       throw new AppError("User Not Found Error", 400);
     }
-    console.log(`[DB:MONGODB] User validated successfully: ${userId}`);
+    log.debug("User validated successfully");
 
     await job.updateProgress(buildResumeProgressPayload(25));
 
-    // Load the stored file metadata so the worker can read the uploaded file.
-    console.log(
-      `[DB:MONGODB] Step 2 (25%): Fetching file metadata for ${fileId}...`,
-    );
+    // Step 2: Load the stored file metadata so the worker can read the uploaded file.
+    log.debug("Step 2 (25%): Fetching file metadata from MongoDB");
     const resumeFile = await fileRepository.findFileById(fileId);
     if (!resumeFile) {
-      console.error(`[DB:MONGODB] Resume file not found: ${fileId}`);
+      log.error("Resume file record not found in MongoDB");
       throw new AppError("Resume file not found", 404);
     }
-    console.log(
-      `[DB:MONGODB] File metadata found: name="${resumeFile.getName()}", hash=${resumeFile.getHash()}`,
+    const fileHash = resumeFile.getHash();
+    log.debug(
+      { fileName: resumeFile.getName(), fileHash },
+      "File metadata loaded from database",
     );
 
-    // Reuse cached analysis if it already exists for the same file hash.
-    console.log(
-      `[CACHE:REDIS] Step 3: Checking Redis cache for key "resume:${resumeFile.getHash()}"...`,
-    );
-    const cachedAnalyzedData = await redisClient.get(
-      `resume:${resumeFile.getHash()}`,
-    );
+    // Step 3: Reuse cached analysis if it already exists for the same file hash.
+    const redisCacheKey = `resume:${fileHash}`;
+    log.debug({ redisCacheKey }, "Step 3: Checking Redis cache for existing analysis");
+    const cachedAnalyzedData = await redisClient.get(redisCacheKey);
+
     if (cachedAnalyzedData) {
       const parsedAnalyzedData = JSON.parse(cachedAnalyzedData);
 
@@ -103,8 +99,9 @@ export const processResumeAnalysisJob = async (
         parsedAnalyzedData.skillInsights.allSkills &&
         Array.isArray(parsedAnalyzedData.skillInsights.allSkills)
       ) {
-        console.log(
-          `[CACHE:REDIS] >>> CACHE HIT! Found cached analysis for hash: ${resumeFile.getHash()}. Skipping AI pipeline.`,
+        log.info(
+          { fileHash, redisCacheKey },
+          "Redis cache HIT: Reusing cached analysis. Skipping AI pipeline",
         );
         await job.updateProgress(buildResumeProgressPayload(100));
 
@@ -113,15 +110,13 @@ export const processResumeAnalysisJob = async (
           message: "Resume analyzed data retrieved from cache",
           data: {
             fileId,
-            hash: resumeFile.getHash(),
+            hash: fileHash,
             analyzedData: parsedAnalyzedData,
           },
         };
       }
     }
-    console.log(
-      `[CACHE:REDIS] >>> CACHE MISS for hash: ${resumeFile.getHash()}. Proceeding with analysis pipeline.`,
-    );
+    log.debug({ fileHash }, "Redis cache MISS. Proceeding with text extraction and AI analysis");
 
     let parsedText: string | undefined;
 
@@ -133,34 +128,31 @@ export const processResumeAnalysisJob = async (
       existingParseText.length > 0 &&
       existingParseText[0]?.trim().length > 0
     ) {
-      console.log(
-        `[DB:MONGODB] Found pre-existing parseText in MongoDB (${existingParseText[0].length} chars). Skipping MinIO download.`,
+      log.debug(
+        { textLength: existingParseText[0].length },
+        "Found pre-existing parseText in MongoDB. Skipping MinIO download",
       );
-
       parsedText = existingParseText[0];
-
       await job.updateProgress(buildResumeProgressPayload(40));
     } else {
       // Download the resume bytes from object storage and build the expected file payload.
       const bucketName = process.env.MINIO_BUCKET || "resumes";
-      console.log(
-        `[STORAGE:MINIO] Step 4: Downloading file stream from MinIO bucket "${bucketName}", path: "${resumeFile.getPath()}"...`,
-      );
+      const minioPath = resumeFile.getPath();
+      log.debug({ bucketName, minioPath }, "Step 4: Downloading file from MinIO storage");
       const downloadStart = Date.now();
 
       let fileBuffer: Buffer;
       try {
-        const objectStream = await minioClient.getObject(
-          bucketName,
-          resumeFile.getPath(),
-        );
+        const objectStream = await minioClient.getObject(bucketName, minioPath);
         fileBuffer = await streamToBuffer(objectStream);
-        console.log(
-          `[STORAGE:MINIO] Downloaded ${fileBuffer.length} bytes in ${Date.now() - downloadStart}ms`,
+        log.debug(
+          { bytes: fileBuffer.length, downloadMs: Date.now() - downloadStart },
+          "File downloaded from MinIO successfully",
         );
       } catch (minioErr: any) {
-        console.error(
-          `[STORAGE:MINIO] Failed to retrieve object from MinIO ("${resumeFile.getPath()}"): ${minioErr.message}`,
+        log.error(
+          { err: minioErr, message: minioErr.message, bucketName, minioPath },
+          "Failed to retrieve object from MinIO storage",
         );
         throw new AppError(
           `Resume file bytes not found in storage. Please re-upload the document. (${minioErr.message})`,
@@ -181,9 +173,7 @@ export const processResumeAnalysisJob = async (
       await job.updateProgress(buildResumeProgressPayload(40));
 
       // Parse the resume content and store the extracted text with the file record.
-      console.log(
-        `[PARSER] Step 5 (40%): Parsing resume text from buffer (${resumePayload.mimetype})...`,
-      );
+      log.debug("Step 5 (40%): Parsing resume text from buffer");
       const parseResult = await resumeParseService(
         new UserId(userId),
         resumePayload,
@@ -191,18 +181,14 @@ export const processResumeAnalysisJob = async (
       parsedText = parseResult.data?.rawText;
 
       if (!parseResult.success || !parsedText) {
-        console.error(`[PARSER] Parsing failed: ${parseResult.message}`);
+        log.error({ message: parseResult.message }, "Resume text parsing failed");
         throw new AppError(parseResult.message || "Resume parsing failed", 400);
       }
 
-      console.log(
-        `[PARSER] Resume text parsed successfully (${parsedText.length} characters)`,
-      );
+      log.debug({ charCount: parsedText.length }, "Resume text parsed successfully");
 
       if (resumeFile && parseResult.success && parsedText) {
-        console.log(
-          `[DB:MONGODB] Updating MongoDB file document with parsed text...`,
-        );
+        log.debug("Backfilling parseText into MongoDB file record");
         const updatedFile = new File(
           resumeFile.id,
           resumeFile.userId,
@@ -216,51 +202,43 @@ export const processResumeAnalysisJob = async (
           [parsedText],
         );
         await fileRepository.updateFile(updatedFile);
-        console.log(`[DB:MONGODB] Saved parseText to file record: ${fileId}`);
       }
     }
 
     await job.updateProgress(buildResumeProgressPayload(70));
 
     // Generate the final analyzed resume data directly from parsed text in a single AI call.
-    console.log(
-      `[AI:INSIGHTS] Step 6 (70%): Generating comprehensive analysis, scores & insights directly from parsed text...`,
-    );
+    log.info("Step 6 (70%): Generating comprehensive AI analysis and insights");
     const finalResumeAnalyzedData = await generateResumeAnalyzedData(
       fileId,
       parsedText,
     );
 
     if (!finalResumeAnalyzedData.success || !finalResumeAnalyzedData.data) {
-      console.error(
-        `[AI:INSIGHTS] Failed to generate analyzed data: ${finalResumeAnalyzedData.message}`,
+      log.error(
+        { message: finalResumeAnalyzedData.message },
+        "AI analysis generation failed",
       );
       throw new AppError(
         `Failed to generate analyzed data: ${finalResumeAnalyzedData.message}`,
         500,
       );
     }
-    console.log(
-      `[AI:INSIGHTS] Final analyzed data generated and persisted to MongoDB.`,
-    );
 
-    console.log(
-      `[CACHE:REDIS] Step 7: Storing final analyzedData in Redis key "resume:${finalResumeAnalyzedData.data?.hash}"...`,
-    );
+    log.debug("Step 7: Caching final analysis in Redis");
     await redisClient.set(
       `resume:${finalResumeAnalyzedData.data?.hash}`,
       JSON.stringify(finalResumeAnalyzedData.data?.analyzedData),
     );
-    console.log(`[CACHE:REDIS] Redis cache write successful.`);
+    log.debug("Redis cache write completed");
 
     await job.updateProgress(buildResumeProgressPayload(100));
 
     const totalDuration = Date.now() - jobStartTime;
-    console.log(`======================================================`);
-    console.log(
-      `[WORKER:PIPELINE] FINISHED single-pass resume analysis for file ${fileId} in ${totalDuration}ms (100% complete)`,
+    log.info(
+      { totalDurationMs: totalDuration, fileId, userId },
+      `Single-pass resume analysis completed in ${totalDuration}ms (100%)`,
     );
-    console.log(`======================================================\n`);
 
     return {
       success: true,
@@ -271,11 +249,12 @@ export const processResumeAnalysisJob = async (
       },
     };
   } catch (error: any) {
-    console.error(
-      `[WORKER:PIPELINE] ERROR in processResumeAnalysisJob for file ${fileId}:`,
-      error?.message || error,
+    log.error(
+      { err: error, message: error?.message, fileId, userId },
+      "Error in processResumeAnalysisJob",
     );
 
     throw error;
   }
 };
+

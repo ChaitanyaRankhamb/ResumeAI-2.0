@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import logger from "../../config/logger.config";
 import { resendValidation } from "../../validations/resend.validation";
 import { resendService } from "./resend.service";
 
@@ -9,25 +10,35 @@ import { resendService } from "./resend.service";
 export const resendController = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
-  try {
-    // Extract email from body
-    const email = req.body.email;
+  const log = logger.child({ module: "VERIFY", controller: "resendController" });
+  const rawEmail = req.body?.email;
 
+  log.info({ email: rawEmail }, "Resend verification code request received");
+
+  try {
     // 1. Validate request email
-    const validation = await resendValidation(email);
+    const validation = await resendValidation(rawEmail);
+    log.debug({ email: validation.email }, "Resend code input validation passed");
 
     // 2. Call the resend service
     const result = await resendService(validation.email);
+
+    log.info({ email: validation.email }, "Resend verification code completed successfully");
 
     // 3. Return a successful response
     res.status(200).json({
       success: true,
       message: result.message,
     });
-  } catch (error) {
+  } catch (error: any) {
+    log.error(
+      { err: error, message: error?.message, email: rawEmail },
+      "Resend verification code request failed",
+    );
     // 4. Pass errors to error-handling middleware
     next(error);
   }
 };
+

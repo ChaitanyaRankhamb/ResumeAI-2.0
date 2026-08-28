@@ -1,6 +1,7 @@
 import express from "express";
 import passport from "passport";
 import { authMiddleware } from "../../middlewares/auth.middleware";
+import { requestLogger } from "../../middlewares/requestLogger.middleware";
 import { googleCallbackController } from "./controllers/google.controller";
 import { loginController } from "./controllers/login.controller";
 import { logoutController } from "./controllers/logout.controller";
@@ -9,6 +10,9 @@ import { refreshController } from "./controllers/refresh.controller";
 import { registerController } from "./controllers/register.controller";
 
 const router = express.Router();
+
+// Apply request logger middleware for all user routes
+router.use(requestLogger);
 
 // credentials routes
 router.post("/register", registerController);

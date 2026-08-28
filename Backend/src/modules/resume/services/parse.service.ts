@@ -2,6 +2,7 @@ import fs from "fs";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import textract from "textract";
+import logger from "../../../config/logger.config";
 import { UserId } from "../../../entities/user/userId";
 
 interface ResumeParseResponse {
@@ -16,14 +17,21 @@ export const resumeParseService = async (
   userId: UserId,
   resume: Express.Multer.File,
 ): Promise<ResumeParseResponse> => {
+  const log = logger.child({ module: "RESUME:PARSER", service: "resumeParseService" });
+
   try {
     const mimeType = resume.mimetype;
-    console.log(`[PARSER] Starting text extraction for file: "${resume.originalname}", format: ${mimeType}`);
+    const originalName = resume.originalname;
+    log.info(
+      { userId: userId.toString(), fileName: originalName, mimeType },
+      "Starting resume text extraction",
+    );
+
     let parsedText: string = "";
 
     // PDF Parsing
     if (mimeType === "application/pdf") {
-      console.log(`[PARSER] Using pdf-parse engine...`);
+      log.debug({ fileName: originalName }, "Using pdf-parse extraction engine");
       const sourceBuffer =
         resume.buffer || (resume.path ? fs.readFileSync(resume.path) : null);
       if (!sourceBuffer) {
@@ -41,7 +49,7 @@ export const resumeParseService = async (
       mimeType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ) {
-      console.log(`[PARSER] Using mammoth DOCX extraction engine...`);
+      log.debug({ fileName: originalName }, "Using mammoth DOCX extraction engine");
       if (resume.buffer) {
         const result = await mammoth.extractRawText({
           buffer: resume.buffer as Buffer,
@@ -61,7 +69,7 @@ export const resumeParseService = async (
 
     // DOC Parsing
     else if (mimeType === "application/msword") {
-      console.log(`[PARSER] Using textract DOC extraction engine...`);
+      log.debug({ fileName: originalName }, "Using textract legacy DOC extraction engine");
       if (resume.path) {
         parsedText = await new Promise((resolve, reject) => {
           textract.fromFileWithPath(resume.path, (error, text) => {
@@ -87,28 +95,31 @@ export const resumeParseService = async (
 
     // Unsupported Format
     else {
-      console.warn(`[PARSER] Unsupported file format encountered: ${mimeType}`);
+      log.warn({ fileName: originalName, mimeType }, "Unsupported file format for text extraction");
       return {
         success: false,
         message: "Unsupported file format",
       };
     }
 
-    // BUG FIX #3: The original regex (/\s+/g, " ") collapsed ALL whitespace
-    // including newlines into a single space, turning the resume into one
-    // flat wall of text. Section headings like "PROJECTS" or "Experience"
-    // lost their visual separation, making it much harder for the AI to
-    // detect where one section ends and another begins.
-    // Fix: only collapse horizontal whitespace (spaces/tabs), preserve newlines,
-    // and limit consecutive blank lines to two so structure is readable.
+    // Preserve structure: collapse horizontal spaces, retain line breaks
     parsedText = parsedText
-      .replace(/[^\S\n]+/g, " ")   // collapse spaces/tabs → single space, keep \n
-      .replace(/\n{3,}/g, "\n\n")  // max 2 consecutive blank lines
+      .replace(/[^\S\n]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
       .trim();
 
     const wordCount = parsedText.split(/\s+/).filter(Boolean).length;
     const lineCount = parsedText.split("\n").length;
-    console.log(`[PARSER] Extraction complete. Characters: ${parsedText.length}, Words: ${wordCount}, Lines: ${lineCount}`);
+
+    log.info(
+      {
+        fileName: originalName,
+        charCount: parsedText.length,
+        wordCount,
+        lineCount,
+      },
+      "Resume text extraction completed successfully",
+    );
 
     return {
       success: true,
@@ -118,7 +129,10 @@ export const resumeParseService = async (
       },
     };
   } catch (error: any) {
-    console.error(`[PARSER] Extraction error: ${error.message}`);
+    log.error(
+      { err: error, message: error?.message, fileName: resume?.originalname },
+      "Error during resume text extraction",
+    );
     return {
       success: false,
       message: error.message || "Failed to parse resume",
@@ -126,4 +140,3 @@ export const resumeParseService = async (
   }
 };
 
-// Note: The parsed text is stored in the File entity's parseText array after successful parsing in resume.service.ts

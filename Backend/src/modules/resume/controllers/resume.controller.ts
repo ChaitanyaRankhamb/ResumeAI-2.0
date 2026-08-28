@@ -1,4 +1,5 @@
 import { NextFunction, Response } from "express";
+import logger from "../../../config/logger.config";
 import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
 import { AuthRequest } from "../../../middlewares/auth.middleware";
@@ -16,22 +17,39 @@ export const uploadResumeController = async (
   res: Response,
   next: NextFunction,
 ) => {
+  const log = logger.child({ module: "RESUME", controller: "uploadResumeController" });
+
   try {
     // Validate user
     const userId = req.userId;
-    if (!userId) throw new AppError("User is Unauthorized", 401);
-
-    console.log(`[UPLOAD-HTTP] Received upload request from userId: ${userId}`);
+    if (!userId) {
+      log.warn("Upload resume attempt by unauthenticated user");
+      throw new AppError("User is Unauthorized", 401);
+    }
 
     // 2. Get the uploaded file from Multer
     const resume = req.file; // <-- multer provides the file here
-    if (!resume) throw new AppError("Resume file is not received", 400);
+    if (!resume) {
+      log.warn({ userId }, "Upload resume called without file payload");
+      throw new AppError("Resume file is not received", 400);
+    }
 
-    console.log(`[UPLOAD-HTTP] File received: "${resume.originalname}", type: ${resume.mimetype}, size: ${(resume.size / 1024).toFixed(2)} KB`);
+    log.info(
+      {
+        userId,
+        fileName: resume.originalname,
+        mimeType: resume.mimetype,
+        sizeKb: parseFloat((resume.size / 1024).toFixed(2)),
+      },
+      "Resume upload request received",
+    );
 
     // Validate file type
     if (!ALLOWED_TYPES.includes(resume.mimetype)) {
-      console.warn(`[UPLOAD-HTTP] Invalid file type rejected: ${resume.mimetype}`);
+      log.warn(
+        { userId, fileName: resume.originalname, mimeType: resume.mimetype },
+        "Invalid file type uploaded",
+      );
       throw new AppError(
         "Invalid file type. Only PDF or Word documents allowed.",
         400,
@@ -40,11 +58,18 @@ export const uploadResumeController = async (
 
     // Validate file size
     if (resume.size > MAX_FILE_SIZE) {
-      console.warn(`[UPLOAD-HTTP] File size limit exceeded: ${(resume.size / 1024 / 1024).toFixed(2)} MB`);
+      log.warn(
+        {
+          userId,
+          fileName: resume.originalname,
+          sizeMb: parseFloat((resume.size / 1024 / 1024).toFixed(2)),
+        },
+        "File size exceeds 10MB limit",
+      );
       throw new AppError("File size exceeds 10MB limit.", 400);
     }
 
-    console.log(`[UPLOAD-HTTP] Validation passed. Calling uploadResumeService for userId: ${userId}`);
+    log.debug({ userId, fileName: resume.originalname }, "File validation passed, delegating to uploadResumeService");
 
     // Call service
     const result = await uploadResumeService(
@@ -54,14 +79,17 @@ export const uploadResumeController = async (
 
     // send error response
     if (result && !result.success) {
-      console.error(`[UPLOAD-HTTP] uploadResumeService failed: ${result.message}`);
+      log.error({ userId, message: result.message }, "uploadResumeService failed");
       return res.status(400).json({
         success: false,
         message: result.message,
       });
     }
 
-    console.log(`[UPLOAD-HTTP] Upload accepted. Returning response: fileId=${result.data?.fileId}, status=${result.data?.status}`);
+    log.info(
+      { userId, fileId: result.data?.fileId, status: result.data?.status },
+      "Resume upload accepted and enqueued for processing",
+    );
 
     // Send response
     res.status(200).json({
@@ -69,8 +97,12 @@ export const uploadResumeController = async (
       message: "Resume uploaded and analyzed successfully",
       data: result.data,
     });
-  } catch (error) {
-    // Forward to global error handler
+  } catch (error: any) {
+    log.error(
+      { err: error, message: error?.message, userId: req.userId },
+      "Error during resume upload controller execution",
+    );
     next(error);
   }
 };
+

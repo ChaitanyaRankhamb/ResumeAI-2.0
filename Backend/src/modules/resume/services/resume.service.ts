@@ -1,3 +1,4 @@
+import logger from "../../../config/logger.config";
 import { userRepository } from "../../../database/mongo/user/userModelRepo";
 import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
@@ -14,12 +15,15 @@ export const uploadResumeService = async (
   userId: UserId,
   resume: Express.Multer.File,
 ): Promise<responseData> => {
+  const log = logger.child({ module: "RESUME", service: "uploadResumeService" });
+  const userIdStr = userId.toString();
+
   try {
     // user validation
-    console.log(`[DB:MONGODB] Validating user in database: ${userId}`);
-    const user = await userRepository.findUserById(userId.toString());
+    log.debug({ userId: userIdStr }, "Validating user account in MongoDB");
+    const user = await userRepository.findUserById(userIdStr);
     if (!user) {
-      console.error(`[DB:MONGODB] User not found: ${userId}`);
+      log.warn({ userId: userIdStr }, "User validation failed: Account does not exist");
       throw new AppError("User Not Found Error", 400);
     }
 
@@ -27,7 +31,7 @@ export const uploadResumeService = async (
     const fileResult = await resumeFileService(userId, resume);
 
     if (!fileResult.success) {
-      console.error(`[STORAGE:FILE] File service returned failure: ${fileResult.message}`);
+      log.error({ userId: userIdStr, message: fileResult.message }, "resumeFileService failed");
       return {
         success: false,
         message: fileResult.message,
@@ -35,35 +39,35 @@ export const uploadResumeService = async (
     }
 
     // get the fileId from the fileResult data to create the job payload for the resume analysis queue
-    const fileId = await fileResult.data?.fileId;
+    const fileId = fileResult.data?.fileId;
 
-    console.log(
-      `[QUEUE:BULLMQ] Enqueuing 'resume-parse' job in queue 'resume-analysis' with jobId: ${fileId}, userId: ${userId}`,
+    log.info(
+      { fileId, userId: userIdStr, queue: "resume-analysis" },
+      "Enqueuing 'resume-parse' job in BullMQ queue",
     );
 
     await resumeQueue.add(
       "resume-parse",
       {
         fileId,
-        userId: userId.toString(),
+        userId: userIdStr,
       },
       {
         jobId: fileId,
-        attempts: 3, // retry the job 3 times if it fails and then move it to the failed queue permenently
+        attempts: 3,
         backoff: {
           type: "exponential",
           delay: 5000,
         },
-        removeOnComplete: 100, // only keep latest 100 completed jobs in the queue to save redis memory
-        removeOnFail: 1000, // only keep latest 1000 failed jobs in the queue to save redis memory
+        removeOnComplete: 100,
+        removeOnFail: 1000,
       },
     );
 
-    console.log(
-      `[QUEUE:BULLMQ] Job successfully added to queue. fileId: ${fileId}, status: processing`,
+    log.info(
+      { fileId, userId: userIdStr, status: "processing" },
+      "Job enqueued successfully for background worker processing",
     );
-
-    // The heavy resume-processing flow now runs inside the worker service.
 
     return {
       success: true,
@@ -74,7 +78,10 @@ export const uploadResumeService = async (
       },
     };
   } catch (error: any) {
-    console.error("[SERVICE:RESUME] Error in uploadResumeService:", error?.message || error);
+    log.error(
+      { err: error, message: error?.message, userId: userIdStr },
+      "Error during resume upload orchestration",
+    );
 
     return {
       success: false,
@@ -82,3 +89,4 @@ export const uploadResumeService = async (
     };
   }
 };
+

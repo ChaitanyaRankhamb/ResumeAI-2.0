@@ -1,5 +1,6 @@
-import { Response } from "express";
 import { Queue, QueueEvents } from "bullmq";
+import { Response } from "express";
+import logger from "../../../config/logger.config";
 import { queueConnection } from "../../../queues/queue.config";
 import { ResumeProgressPayload } from "./resume.worker.service";
 
@@ -14,7 +15,8 @@ export const resumeProgressService = async (
   jobId: string,
   res: Response,
 ): Promise<void> => {
-  console.log(`[SSE:PROGRESS] Client opened SSE connection for jobId: ${jobId}`);
+  const log = logger.child({ module: "RESUME:SSE", service: "resumeProgressService" });
+  log.info({ jobId }, "SSE connection stream opened for job progress");
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -38,7 +40,7 @@ export const resumeProgressService = async (
 
   // If the job exists, send its current progress to the client
   if (job) {
-    console.log(`[SSE:PROGRESS] Sending initial job progress to client: ${JSON.stringify(job.progress)} for jobId: ${jobId}`);
+    log.debug({ jobId, progress: job.progress }, "Sending initial job progress to SSE client");
     sendSseEvent(res, job.progress as ResumeProgressPayload);
   }
 
@@ -46,7 +48,7 @@ export const resumeProgressService = async (
   queueEvents.on("progress", ({ jobId: id, data }) => {
     if (id !== jobId) return;
 
-    console.log(`[SSE:PROGRESS] Emitting progress event to SSE stream: ${JSON.stringify(data)} for jobId: ${jobId}`);
+    log.debug({ jobId, progressData: data }, "Streaming progress update via SSE");
     sendSseEvent(res, data as ResumeProgressPayload);
   });
 
@@ -54,21 +56,21 @@ export const resumeProgressService = async (
   queueEvents.on("completed", ({ jobId: id }) => {
     if (id !== jobId) return;
 
-    console.log(`[SSE:PROGRESS] Job ${jobId} completed. Closing SSE stream.`);
+    log.info({ jobId }, "Job execution completed, closing SSE stream");
     res.end();
   });
 
   // Close when failed
-  queueEvents.on("failed", ({ jobId: id }) => {
+  queueEvents.on("failed", ({ jobId: id, failedReason }) => {
     if (id !== jobId) return;
 
-    console.error(`[SSE:PROGRESS] Job ${jobId} failed. Closing SSE stream.`);
+    log.error({ jobId, failedReason }, "Job execution failed, closing SSE stream");
     res.end();
   });
 
   res.on("close", async () => {
-    console.log(`[SSE:PROGRESS] Client closed connection for jobId: ${jobId}`);
+    log.info({ jobId }, "Client disconnected from SSE stream, closing queue listeners");
     await queueEvents.close();
     await queue.close();
   });
-};
+};
