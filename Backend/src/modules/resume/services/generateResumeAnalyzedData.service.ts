@@ -3,11 +3,6 @@ import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { File } from "../../../entities/files/file";
 import { AI_RESPONSE_SYSTEM_PROMPT } from "../../../prompts/ai.response.system.prompt";
 import { ResumeUploadResponse } from "../../../types/resumeUploadResponse";
-import { EnrichedResumeData } from "../Normalization/types/normalizedResume";
-import {
-  computeResumeScores,
-  ResumeScores,
-} from "../Normalization/services/scoring.service";
 
 export interface ResumeAnalyzedDataResponse {
   success: boolean;
@@ -19,12 +14,17 @@ export interface ResumeAnalyzedDataResponse {
   };
 }
 
-// OpenRouter endpoint
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+/**
+ * Clamps a numerical value to an integer between min and max
+ */
+function clamp(val: any, fallback = 0, min = 0, max = 100): number {
+  const num = typeof val === "number" && !isNaN(val) ? val : fallback;
+  return Math.min(Math.max(Math.round(num), min), max);
+}
 
 export const generateResumeAnalyzedData = async (
   fileId: string,
-  normalizedStructuredData: EnrichedResumeData,
+  parsedText: string,
 ): Promise<ResumeAnalyzedDataResponse> => {
   try {
     const apiKey =
@@ -47,28 +47,9 @@ export const generateResumeAnalyzedData = async (
       ? process.env.GEMINI_MODEL || "gemini-3.6-flash"
       : process.env.OPENROUTER_MODEL || "openrouter/free";
 
-    console.log(`\n------------------------------------------------------`);
-    console.log(`[NORMALIZATION:OUTPUT] Normalized Resume Payload for fileId: ${fileId}:`);
-    console.log(JSON.stringify(normalizedStructuredData, null, 2));
-    console.log(`------------------------------------------------------\n`);
-
-    // ── Step 2: Compute scores deterministically ─────────────────────────────
-    // Scores are computed in pure TypeScript — never delegated to the AI.
-    // This guarantees the same resume always gets the same score, eliminating
-    // the non-determinism that caused 40 vs 70 score swings.
-    const computedScores: ResumeScores = computeResumeScores(normalizedStructuredData);
-
     console.log(
-      `[ENGINE:SCORING] Deterministic scores computed: overall=${computedScores.overall}, skills=${computedScores.skills}, experience=${computedScores.experience}, projects=${computedScores.projects}`,
+      `[AI:INSIGHTS] Calling single-pass AI model "${modelName}" via ${isGemini ? "Google Gemini (Free)" : "OpenRouter"} for fileId: ${fileId} (Input text: ${parsedText.length} chars)...`,
     );
-
-    // ── Step 3: Build the AI input payload ──────────────────────────────────
-    // We pass both the enriched resume data AND the computed scores.
-    // The AI receives scores as immutable facts and must copy them into output.
-    const inputPayload = {
-      resumeData: normalizedStructuredData,
-      computedScores,
-    };
 
     const messages = [
       {
@@ -77,15 +58,11 @@ export const generateResumeAnalyzedData = async (
       },
       {
         role: "user",
-        content: JSON.stringify(inputPayload, null, 2),
+        content: `Resume Text:\n${parsedText}`,
       },
     ];
 
-    console.log(
-      `[AI:INSIGHTS] Calling AI model "${modelName}" via ${isGemini ? "Google Gemini (Free)" : "OpenRouter"} for fileId: ${fileId} to generate final report...`,
-    );
-
-    // ── Step 4: Call AI API ──────────────────────────────────────────
+    // ── Call AI API ──────────────────────────────────────────────────────────
     const aiCallStart = Date.now();
     const response = await fetch(apiUrl, {
       method: "POST",
@@ -96,7 +73,7 @@ export const generateResumeAnalyzedData = async (
       body: JSON.stringify({
         model: modelName,
         messages,
-        temperature: 0,        // deterministic output
+        temperature: 0.1,
         max_tokens: 8192,
         response_format: { type: "json_object" },
       }),
@@ -105,14 +82,14 @@ export const generateResumeAnalyzedData = async (
     const aiLatency = Date.now() - aiCallStart;
     console.log(`[AI:INSIGHTS] AI model responded in ${aiLatency}ms with HTTP status: ${response.status}`);
 
-    // ── Step 5: Handle non-200 responses ─────────────────────────────────────
+    // ── Handle non-200 responses ─────────────────────────────────────────────
     if (!response.ok) {
       const errorBody = await response.text();
       console.error(`[AI:INSIGHTS] API error ${response.status}: ${errorBody}`);
       throw new Error(`AI API error ${response.status}: ${errorBody}`);
     }
 
-    // ── Step 6: Parse API response ───────────────────────────────────────────
+    // ── Parse API response ───────────────────────────────────────────────────
     const responseText = await response.text();
     let result: any;
     try {
@@ -126,11 +103,11 @@ export const generateResumeAnalyzedData = async (
 
     const text = result?.choices?.[0]?.message?.content;
     if (!text || text.trim().length === 0) {
-      console.error(`[AI:INSIGHTS] Empty response received from OpenRouter`);
-      throw new Error("Empty response received from OpenRouter");
+      console.error(`[AI:INSIGHTS] Empty response received from AI model choices`);
+      throw new Error("Empty response received from AI model");
     }
 
-    // ── Step 7: Strip markdown fences if present ─────────────────────────────
+    // ── Strip markdown fences if present ─────────────────────────────────────
     let cleanText = text.trim();
     if (cleanText.startsWith("```json")) {
       console.log(`[AI:INSIGHTS] Stripping \`\`\`json markdown fences from insights output`);
@@ -140,20 +117,20 @@ export const generateResumeAnalyzedData = async (
       cleanText = cleanText.replace(/^```\s*/, "").replace(/\s*```$/, "");
     }
 
-    // ── Step 8: Parse JSON from AI ───────────────────────────────────────────
+    // ── Parse JSON from AI ───────────────────────────────────────────────────
     let parsedData: ResumeUploadResponse;
     try {
       parsedData = JSON.parse(cleanText) as ResumeUploadResponse;
-      console.log(`[AI:INSIGHTS] Final insights JSON parsed successfully`);
+      console.log(`[AI:INSIGHTS] Single-pass analysis JSON parsed successfully`);
     } catch (err) {
       console.error("[AI:INSIGHTS] Failed to parse AI JSON response", {
         fileId,
         responseLength: cleanText.length,
       });
-      throw new Error("Invalid JSON format from OpenRouter text response");
+      throw new Error("Invalid JSON format from AI model text response");
     }
 
-    // ── Step 9: Validate required fields ─────────────────────────────────────
+    // ── Validate and enforce required structure ──────────────────────────────
     if (
       !parsedData.skillInsights ||
       !parsedData.skillInsights.allSkills ||
@@ -165,22 +142,63 @@ export const generateResumeAnalyzedData = async (
       throw new Error("AI response missing required skillInsights data");
     }
 
-    // ── Step 10: Enforce computed scores in parsed output ────────────────────
-    // Even if the AI drifted from the instruction, we hard-override all score
-    // fields here so the stored data is always consistent with the engine.
-    parsedData.skillInsights.score = computedScores.skills;
-    parsedData.experienceInsights.score = computedScores.experience;
-    parsedData.projectInsights.score = computedScores.projects;
-    parsedData.scores = {
-      overall: computedScores.overall,
-      skills: computedScores.skills,
-      experience: computedScores.experience,
-      projects: computedScores.projects,
+    // ── Ensure score synchronization and bounds ──────────────────────────────
+    parsedData.scores = parsedData.scores || {
+      overall: 0,
+      skills: 0,
+      experience: 0,
+      projects: 0,
     };
 
-    console.log("[AI:INSIGHTS] Enforced deterministic scores on final output object:", parsedData.scores);
+    parsedData.scores.skills = clamp(
+      parsedData.scores.skills ?? parsedData.skillInsights?.score,
+      50,
+    );
+    parsedData.scores.projects = clamp(
+      parsedData.scores.projects ?? parsedData.projectInsights?.score,
+      50,
+    );
+    parsedData.scores.experience = clamp(
+      parsedData.scores.experience ?? parsedData.experienceInsights?.score,
+      50,
+    );
+    parsedData.scores.overall = clamp(
+      parsedData.scores.overall ??
+        Math.round(
+          parsedData.scores.skills * 0.3 +
+            parsedData.scores.projects * 0.4 +
+            parsedData.scores.experience * 0.3,
+        ),
+      Math.round(
+        parsedData.scores.skills * 0.3 +
+          parsedData.scores.projects * 0.4 +
+          parsedData.scores.experience * 0.3,
+      ),
+    );
 
-    // ── Step 11: Persist to database ─────────────────────────────────────────
+    if (parsedData.skillInsights) {
+      parsedData.skillInsights.score = parsedData.scores.skills;
+    }
+    if (parsedData.experienceInsights) {
+      parsedData.experienceInsights.score = parsedData.scores.experience;
+    }
+    if (parsedData.projectInsights) {
+      parsedData.projectInsights.score = parsedData.scores.projects;
+    }
+
+    // Ensure interview prep arrays exist
+    parsedData.interviewPrep = parsedData.interviewPrep || {
+      basic: [],
+      intermediate: [],
+      advanced: [],
+    };
+    parsedData.interviewPrep.basic = parsedData.interviewPrep.basic || [];
+    parsedData.interviewPrep.intermediate = parsedData.interviewPrep.intermediate || [];
+    parsedData.interviewPrep.advanced = parsedData.interviewPrep.advanced || [];
+
+    console.log("[AI:INSIGHTS] Final synchronized scores:", parsedData.scores);
+
+    // ── Persist to database ──────────────────────────────────────────────────
     if (fileId) {
       console.log(`[DB:MONGODB] Updating File ${fileId} in MongoDB with final analyzedData...`);
       const file = await fileRepository.findFileById(fileId);
