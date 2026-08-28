@@ -1,16 +1,9 @@
-import redisClient from "../../../config/redis.connection";
-import { fileRepository } from "../../../database/mongo/files/fileModelRepo";
 import { userRepository } from "../../../database/mongo/user/userModelRepo";
-import { File } from "../../../entities/files/file";
 import { UserId } from "../../../entities/user/userId";
 import { AppError } from "../../../Error/appError";
 import { resumeQueue } from "../../../queues/resume-queue";
-import { validateStructuredData } from "../../../validations/resumeStructureData.validation";
-import { processResume } from "../Normalization";
 import { resumeFileService } from "./file.service";
-import { generateResumeAnalyzedData } from "./generateResumeAnalyzedData.service";
-import { generateStructuredData } from "./generateStructureData.service";
-import { resumeParseService } from "./parse.service";
+
 interface responseData {
   success: boolean;
   message: string;
