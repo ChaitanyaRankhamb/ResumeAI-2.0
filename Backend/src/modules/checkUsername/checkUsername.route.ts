@@ -1,4 +1,5 @@
 import express from "express";
+import { checkUsernameRateLimiter } from "../../middlewares/rateLimiter.middleware";
 import { requestLogger } from "../../middlewares/requestLogger.middleware";
 import { checkUsernameController } from "./checkUsername.controller";
 
@@ -8,10 +9,11 @@ const router = express.Router();
 router.use(requestLogger);
 
 /**
- * Route to check username availability.
+ * Route to check username availability (30 req / min for real-time UI typing).
  * Expected query param: ?username=example
  */
-router.get("/", checkUsernameController);
+router.get("/", checkUsernameRateLimiter, checkUsernameController);
 
 export default router;
+
 

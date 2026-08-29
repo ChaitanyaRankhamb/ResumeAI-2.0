@@ -1,5 +1,9 @@
 import express from "express";
 import { authMiddleware } from "../../middlewares/auth.middleware";
+import {
+  resumeAnalysisRateLimiter,
+  resumeUploadRateLimiter,
+} from "../../middlewares/rateLimiter.middleware";
 import { requestLogger } from "../../middlewares/requestLogger.middleware";
 import { uploadResumeMiddleware } from "../../middlewares/upload.resume.middleware";
 import { getResumeAnalysisController } from "./controllers/getResumeAnalysis.controller";
@@ -10,15 +14,22 @@ const router = express.Router();
 // Apply HTTP request logging middleware
 router.use(requestLogger);
 
-// route to upload resume  it should be protected
+// Route to upload resume (Protected by 10 req/min Token Bucket rate limiter)
 router.post(
   "/",
   authMiddleware,
+  resumeUploadRateLimiter,
   uploadResumeMiddleware,
   uploadResumeController,
 );
 
-// Get analyzed resume report data (protected)
-router.get("/analysis/:fileId", authMiddleware, getResumeAnalysisController);
+// Get analyzed resume report data (30 req / min)
+router.get(
+  "/analysis/:fileId",
+  authMiddleware,
+  resumeAnalysisRateLimiter,
+  getResumeAnalysisController,
+);
 
 export default router;
+
