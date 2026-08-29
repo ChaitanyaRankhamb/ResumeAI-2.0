@@ -11,8 +11,10 @@ import checkUsernameRouter from "./modules/checkUsername/checkUsername.route";
 import resumeRouter from "./modules/resume/resume.routes";
 import userRouter from "./modules/user/user.routes";
 import verifyRouter from "./modules/verify/verify.route";
+import healthRouter from "./routes/health.route";
 import reportPdfRoutes from "./routes/report-pdf";
 import resumeProgressRouter from "./modules/resume/resume.progress.route";
+import helmet from "helmet";
 
 // Create a new express application instance
 const app = express();
@@ -42,6 +44,8 @@ const corsOptions = {
   credentials: true,
 };
 
+app.use(helmet()); // connect with helmet for security headers
+
 app.use(cors(corsOptions)); // connect with cors
 
 // Cookie Parser Middleware
@@ -51,6 +55,9 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize()); // initialize the passport middleware
+
+// Health Check Endpoint (MongoDB, Redis, MinIO)
+app.use("/health", healthRouter);
 
 // Routes
 app.use("/auth", userRouter);
